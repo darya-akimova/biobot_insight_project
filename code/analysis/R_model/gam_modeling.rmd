@@ -1,0 +1,168 @@
+---
+title: "gam_modeling"
+author: "darya akimova"
+date: "9/23/2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Setup
+
+## Packages:
+
+```{r packages, comment=NA}
+library(tidyverse)
+library(viridis)
+library(sf)
+library(mgcv)
+theme_set(theme_minimal())
+```
+
+
+## Data:
+
+```{r data_import, comment=NA}
+death_and_acs_data <- read_csv("../../../data/tidy_data/death_count_norm_to_pop_and_acs_town_demographics_merge.csv")
+ma_town_coord <- read_csv("../../../data/tidy_data/ma_town_crs4326_coords.csv")
+opi_pres_13 <- read_csv("../../../data/tidy_data/medicare_partD_opioid_prescriber_2013_w_zip_MAtown_v1.csv") %>% 
+  select(-1)
+opi_pres_14 <- read_csv("../../../data/tidy_data/medicare_partD_opioid_prescriber_2014_w_zip_MAtown_v1.csv") %>% 
+  select(-1)
+opi_pres_15 <- read_csv("../../../data/tidy_data/medicare_partD_opioid_prescriber_2015_w_zip_MAtown_v1.csv") %>% 
+  select(-1)
+opi_pres_16 <- read_csv("../../../data/tidy_data/medicare_partD_opioid_prescriber_2016_w_zip_MAtown_v1.csv") %>% 
+  select(-1)
+opi_pres_17 <- read_csv("../../../data/tidy_data/medicare_partD_opioid_prescriber_2017_w_zip_MAtown_v1.csv") %>% 
+  select(-1)
+ma_town_map <- st_read("../../../data/raw_data/townssurvey_shp/TOWNSSURVEY_POLYM.shp")
+```
+
+
+# EDA and Feature Engineering
+
+## Data structure
+
+```{r data_glimpse, comment=NA}
+glimpse(death_and_acs_data)
+glimpse(ma_town_coord)
+glimpse(opi_pres_13)
+glimpse(opi_pres_14)
+glimpse(opi_pres_15)
+glimpse(opi_pres_16)
+glimpse(opi_pres_17)
+```
+
+
+## Joining datasets
+
+```{r}
+acs_data_w_geospatial <- death_and_acs_data %>% 
+  inner_join(ma_town_coord, by = c("city_death" = "town"))
+ma_town_map_w_data <- ma_town_map %>% 
+  st_transform(crs = "+init=epsg:4326") %>% 
+  mutate(TOWN = str_to_lower(TOWN)) %>% 
+  left_join(death_and_acs_data, by = c("TOWN" = "city_death"))
+```
+
+
+```{r mapping, comment=NA}
+ma_town_map_w_data %>%
+  ggplot() +
+  geom_sf(aes(fill = death_rate_18), color = "black") +
+  scale_fill_viridis_c(option = "D", name = "Rate") +
+  theme(axis.text.x = element_blank(), axis.text.y = element_blank()) +
+  ggtitle("Opioid overdose death rate per 10k town residents\n2018")
+ma_town_map_w_data %>%
+  ggplot() +
+  geom_sf(aes(fill = death_rate_17), color = "black") +
+  scale_fill_viridis_c(option = "D", name = "Rate") +
+  theme(axis.text.x = element_blank(), axis.text.y = element_blank()) +
+  ggtitle("Opioid overdose death rate per 10k town residents\n2017")
+ma_town_map_w_data %>%
+  ggplot() +
+  geom_sf(aes(fill = death_rate_16), color = "black") +
+  scale_fill_viridis_c(option = "D", name = "Rate") +
+  theme(axis.text.x = element_blank(), axis.text.y = element_blank()) +
+  ggtitle("Opioid overdose death rate per 10k town residents\n2016")
+ma_town_map_w_data %>%
+  ggplot() +
+  geom_sf(aes(fill = death_rate_15), color = "black") +
+  scale_fill_viridis_c(option = "D", name = "Rate") +
+  theme(axis.text.x = element_blank(), axis.text.y = element_blank()) +
+  ggtitle("Opioid overdose death rate per 10k town residents\n2015")
+ma_town_map_w_data %>%
+  ggplot() +
+  geom_sf(aes(fill = death_rate_14), color = "black") +
+  scale_fill_viridis_c(option = "D", name = "Rate") +
+  theme(axis.text.x = element_blank(), axis.text.y = element_blank()) +
+  ggtitle("Opioid overdose death rate per 10k town residents\n2014")
+ma_town_map_w_data %>%
+  ggplot() +
+  geom_sf(aes(fill = death_rate_13), color = "black") +
+  scale_fill_viridis_c(option = "D", name = "Rate") +
+  theme(axis.text.x = element_blank(), axis.text.y = element_blank()) +
+  ggtitle("Opioid overdose death rate per 10k town residents\n2013")
+```
+
+
+```{r}
+# death rate change calculations:
+data_for_mod <- acs_data_w_geospatial %>% 
+  mutate(
+    diff_18_17 = death_rate_18 - death_rate_17,
+    diff_17_16 = death_rate_17 - death_rate_16,
+    diff_16_15 = death_rate_16 - death_rate_15,
+    diff_15_14 = death_rate_15 - death_rate_14,
+    diff_14_13 = death_rate_14 - death_rate_13
+  ) %>% 
+  select(-c(death_rate_12:death_rate_18)) %>% 
+  gather(key = "years_chng", value = "diff", diff_18_17:diff_14_13) %>% 
+  mutate(
+    year = case_when(
+      years_chng == "diff_18_17" ~ 2017,
+      years_chng == "diff_17_16" ~ 2016,
+      years_chng == "diff_16_15" ~ 2015,
+      years_chng == "diff_15_14" ~ 2014,
+      years_chng == "diff_14_13" ~ 2013,
+    )
+  ) %>% 
+  select(-years_chng) %>% 
+  mutate(id = row_number())
+data_for_mod %>% 
+  mutate(year = as_factor(year)) %>% 
+  ggplot(aes(year, diff, group = year, fill = year)) +
+  geom_violin() 
+data_for_mod %>% 
+  mutate(year = as_factor(year)) %>% 
+  ggplot(aes(year, diff, group = year, fill = year)) +
+  geom_boxplot() 
+```
+
+
+# Modeling
+
+
+## Test - train split
+
+```{r}
+set.seed(2019)
+test_set <- data_for_mod %>% 
+  sample_frac(0.2, replace = FALSE)
+train_set <- data_for_mod %>% 
+  filter(!(id %in% (test_set$id)))
+```
+
+
+## Model - only acs and geospatial data
+
+```{r}
+# base model with geometry and year only
+base_model <- gam(diff ~ s(x, y) + s(year, k=3), data = train_set, method="REML", select=TRUE)
+summary(base_model)
+coef(base_model)
+#town_data$model_fit <- predict(copy_base_model, town_data,type = "response")
+```
+
