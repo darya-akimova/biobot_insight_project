@@ -38,6 +38,7 @@ opi_pres_16 <- read_csv("../../../data/tidy_data/medicare_partD_opioid_prescribe
 opi_pres_17 <- read_csv("../../../data/tidy_data/medicare_partD_opioid_prescriber_2017_w_zip_MAtown_v1.csv") %>% 
   select(-1)
 ma_town_map <- st_read("../../../data/raw_data/townssurvey_shp/TOWNSSURVEY_POLYM.shp")
+acs_medicare_opioid_merge <- read_csv("../../../data/tidy_data/acs_medicare_opioid_stats_death_rate.csv")
 ```
 
 
@@ -139,6 +140,11 @@ data_for_mod %>%
   mutate(year = as_factor(year)) %>% 
   ggplot(aes(year, diff, group = year, fill = year)) +
   geom_boxplot() 
+data_for_mod %>% 
+  mutate(year = as_factor(year)) %>% 
+  ggplot(aes(diff, fill = year)) +
+  geom_histogram(bins = 50) +
+  facet_wrap(~ year)
 ```
 
 
@@ -213,5 +219,54 @@ summary(all_acs_mean_model)
 gam.check(all_acs_mean_model)
 concurvity(all_acs_mean_model)
 mean(abs(train_mean_diff$mean_diff - predict(all_acs_mean_model, train_mean_diff, type = "response")), na.rm = TRUE)
+```
+
+
+
+
+
+
+
+
+
+
+
+
+```{r}
+acs_medicare_opioid_merge %>% 
+  mutate(year = as_factor(year)) %>% 
+  ggplot(aes(death_rate_per10k)) +
+  geom_histogram() +
+  facet_wrap(~year) +
+  ggtitle("Death rate for next year (add +1 to year)")
+acs_medicare_opioid_merge <- acs_medicare_opioid_merge %>% 
+  mutate(id = row_number()) %>% 
+  inner_join(ma_town_coord, by = c("city_death" = "town"))
+set.seed(2019)
+test_set_alt <- acs_medicare_opioid_merge %>% 
+  sample_frac(0.2, replace = FALSE)
+train_set_alt <- acs_medicare_opioid_merge %>% 
+  filter(!(id %in% (test_set_alt$id)))
+
+
+
+all_acs_model_alt <- gam(
+  death_rate_per10k ~ s(x, y) + year + s(med_house_inc) + s(mean_house_inc) + s(mean_med_inc_desp) + s(drop_out) + s(less_than_hs_ed) + s(at_or_below_pov_prop) + s(pop_struggling_prop) + town_status + urb_v_rur + s(opioid_claim_count_avg) + s(opioid_rate_avg) + s(claim_per_65_and_over) + s(opi_claim_per_65_and_over),
+  data = train_set_alt, method = "REML", select = TRUE, family = "poisson"
+  )
+summary(all_acs_model_alt)
+
+
+mean(abs(train_set_alt$death_rate_per10k - predict(all_acs_model_alt, train_set_alt, type = "response")), na.rm = TRUE)
+plot(train_set_alt$death_rate_per10k,  predict(all_acs_model_alt, train_set_alt, type = "response"))
+train_set_alt$mod1_pred <- predict(all_acs_model_alt, train_set_alt, type = "response")
+
+train_set_alt %>% 
+  ggplot(aes(death_rate_per10k, mod1_pred)) +
+  geom_point(alpha = 0.5, size = 1) +
+  geom_abline(slope = 1, intercept = 0) +
+  facet_wrap(~ year)
+gam.check(all_acs_model_alt)
+concurvity(all_acs_model_alt)
 ```
 
