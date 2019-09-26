@@ -232,7 +232,7 @@ mean(abs(train_mean_diff$mean_diff - predict(all_acs_mean_model, train_mean_diff
 
 
 
-```{r}
+```{r,eval=FALSE}
 acs_medicare_opioid_merge %>% 
   mutate(year = as_factor(year)) %>% 
   ggplot(aes(death_rate_per10k)) +
@@ -248,6 +248,163 @@ test_set_alt <- acs_medicare_opioid_merge %>%
 train_set_alt <- acs_medicare_opioid_merge %>% 
   filter(!(id %in% (test_set_alt$id)))
 
+
+
+all_acs_model_alt <- gam(
+  death_rate_per10k ~ s(x, y) + year + s(med_house_inc) + s(mean_house_inc) + s(mean_med_inc_desp) + s(drop_out) + s(less_than_hs_ed) + s(at_or_below_pov_prop) + s(pop_struggling_prop) + town_status + urb_v_rur + s(opioid_claim_count_avg) + s(opioid_rate_avg) + s(claim_per_65_and_over) + s(opi_claim_per_65_and_over),
+  data = train_set_alt, method = "REML", select = TRUE, family = "poisson"
+  )
+summary(all_acs_model_alt)
+
+
+mean(abs(train_set_alt$death_rate_per10k - predict(all_acs_model_alt, train_set_alt, type = "response")), na.rm = TRUE)
+plot(train_set_alt$death_rate_per10k,  predict(all_acs_model_alt, train_set_alt, type = "response"))
+train_set_alt$mod1_pred <- predict(all_acs_model_alt, train_set_alt, type = "response")
+
+train_set_alt %>% 
+  ggplot(aes(death_rate_per10k, mod1_pred)) +
+  geom_point(alpha = 0.5, size = 1) +
+  geom_abline(slope = 1, intercept = 0) +
+  facet_wrap(~ year)
+gam.check(all_acs_model_alt)
+concurvity(all_acs_model_alt)
+```
+
+
+
+
+```{r}
+death_acs_merge_full <- read_csv("../../../data/tidy_data/death_count_norm_to_pop_and_acs_town_demographics_merge_all_cols.csv")
+benzo_pres <- read_csv("../../../data/tidy_data/med_partD_benzo_sum_w_town_merge_13_to_17.csv")
+```
+
+
+
+```{r}
+acs_medicare_opioid_merge
+death_acs_merge_full
+```
+
+
+```{r}
+colnames(acs_medicare_opioid_merge)
+table(acs_medicare_opioid_merge$year)
+
+colnames(death_acs_merge_full)
+yearly_pop <- death_acs_merge_full %>% 
+  select(city_death, tot_pop_17, tot_pop_16:tot_pop_13) %>% 
+  gather(key="year", value="tot_pop", -city_death) %>% 
+  mutate(
+    year = case_when(
+      year == "tot_pop_17" ~ 2017,
+      year == "tot_pop_16" ~ 2016,
+      year == "tot_pop_15" ~ 2015,
+      year == "tot_pop_14" ~ 2014,
+      year == "tot_pop_13" ~ 2013,
+      TRUE ~ 0
+    )
+  )
+
+mod_df_count <- acs_medicare_opioid_merge %>% 
+  select(-c(tot_pop_17, over_65_prop, mean_med_inc_desp)) %>% 
+  inner_join(yearly_pop, by = c("city_death", "year"))
+mod_df_count
+yearly_death_count <- death_acs_merge_full %>% 
+  select(city_death, `2014`:`2018`) %>% 
+  gather(key="year", value="death_count_next_year", -city_death) %>% 
+  mutate(year = as.numeric(year) - 1)
+yearly_death_count
+mod_df_count <- yearly_death_count %>% 
+  inner_join(mod_df_count, by = c("city_death", "year"))
+mod_df_count
+benzo_pres %>% 
+  ggplot(aes(sqrt(total_claim_count), sqrt(total_day_supply), color = generic_name)) +
+  geom_point(alpha = 0.5, size = 1) +
+  facet_wrap(~ year)
+benzo_pres %>% 
+  ggplot(aes(sqrt(total_claim_count), sqrt(total_30_day_fill_count), color = generic_name)) +
+  geom_point(alpha = 0.5, size = 1) +
+  facet_wrap(~ year)
+benzo_tot_day_supp <- benzo_pres %>% 
+  select(town:year, total_day_supply) %>% 
+  spread(key = generic_name, value = total_day_supply)
+benzo_tot_day_supp %>% 
+  ggplot(aes(sqrt(alprazolam), sqrt(diazepam))) +
+  geom_point() +
+  facet_wrap(~ year)
+benzo_tot_day_supp %>% 
+  ggplot(aes(sqrt(alprazolam), sqrt(lorazepam))) +
+  geom_point() +
+  facet_wrap(~ year)
+sapply(data.frame(sapply(benzo_tot_day_supp, is.na)), sum)
+benzo_tot_day_supp_nona <- benzo_tot_day_supp %>% 
+  replace(is.na(.), 0) %>% 
+  rename(city_death = town)
+sapply(data.frame(sapply(benzo_tot_day_supp_nona, is.na)), sum)
+benzo_tot_day_supp_nona %>% 
+  ggplot(aes(sqrt(alprazolam), sqrt(diazepam))) +
+  geom_point() +
+  facet_wrap(~ year)
+benzo_tot_day_supp_nona
+mod_df_count <- mod_df_count %>% 
+  inner_join(benzo_tot_day_supp_nona, by = c("city_death", "year")) %>% 
+  mutate(
+    alprazolam_per_65_and_over = alprazolam / over_65_count,
+    diazepam_per_65_and_over = diazepam / over_65_count,
+    lorazepam_per_65_and_over = lorazepam / over_65_count,
+    tot_benzo_count = alprazolam + diazepam + lorazepam,
+    tot_benzo_per_65_and_over = tot_benzo_count / over_65_count
+  )
+colnames(mod_df_count)
+summary(mod_df_count)
+```
+
+```{r}
+library(caret)
+#flds <- createFolds(y, k = 10, list = TRUE, returnTrain = FALSE)
+#names(flds)[1] <- "train"
+```
+
+
+```{r}
+set.seed(2019)
+test_set_alt <- mod_df_count %>% 
+  sample_frac(0.2, replace = FALSE)
+train_set_alt <- mod_df_count %>% 
+  filter(!(id %in% (test_set_alt$id)))
+set.seed(2018)
+flds <- createFolds(test_set_alt$death_count_next_year, k = 5, list = TRUE, returnTrain = FALSE)
+test <- createFolds(test_set_alt$death_count_next_year, k = 5)
+test_set_alt[flds[[1]], ]$id
+flds[[2]]
+flds[[3]]
+flds[[4]]
+flds[[5]]
+
+base_model_test
+
+mean(mod_df_count$death_count_next_year)
+var(mod_df_count$death_count_next_year)
+
+base_model_error <- function(fold) {
+  valid_set1 <- train_set_alt[fold, ]
+  train_set1 <- train_set_alt %>% filter(!(id %in% valid_set1$id))
+  model1 <- gam(
+    death_count_next_year ~ s(x,y) + s(year, k=3) + s(tot_pop),
+    data = train_set1, method = "REML", family = nb()
+    )
+  error1 <- mean(abs(valid_set1$death_count_next_year - predict(model1, valid_set1, type = "response")))
+  return(error1)
+}
+base_model_all_er <- map_dbl(flds, base_model_error)
+mean(base_model_all_er)
+
+
+base_model <- gam(
+  death_count_next_year ~ s(x,y) + s(year, k=3) + s(tot_pop),
+  data = train_set_alt, method = "REML", family = nb()
+  )
+summary(base_model)
 
 
 all_acs_model_alt <- gam(
