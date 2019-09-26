@@ -287,6 +287,9 @@ death_acs_merge_full
 
 
 ```{r}
+acs_medicare_opioid_merge <- acs_medicare_opioid_merge %>% 
+  mutate(id = row_number()) %>% 
+  inner_join(ma_town_coord, by = c("city_death" = "town"))
 colnames(acs_medicare_opioid_merge)
 table(acs_medicare_opioid_merge$year)
 
@@ -381,8 +384,6 @@ flds[[3]]
 flds[[4]]
 flds[[5]]
 
-base_model_test
-
 mean(mod_df_count$death_count_next_year)
 var(mod_df_count$death_count_next_year)
 
@@ -396,15 +397,144 @@ base_model_error <- function(fold) {
   error1 <- mean(abs(valid_set1$death_count_next_year - predict(model1, valid_set1, type = "response")))
   return(error1)
 }
+base_model_rmse_error <- function(fold) {
+  valid_set1 <- train_set_alt[fold, ]
+  train_set1 <- train_set_alt %>% filter(!(id %in% valid_set1$id))
+  model1 <- gam(
+    death_count_next_year ~ s(x,y) + s(year, k=3) + s(tot_pop),
+    data = train_set1, method = "REML", family = nb()
+    )
+  error1 <- sqrt(mean((valid_set1$death_count_next_year - predict(model1, valid_set1, type = "response")) ^ 2))
+  return(error1)
+}
 base_model_all_er <- map_dbl(flds, base_model_error)
+base_model_all_er
 mean(base_model_all_er)
 
+base_model_all_rmse_er <- map_dbl(flds, base_model_rmse_error)
+base_model_all_rmse_er
+mean(base_model_all_rmse_er)
 
 base_model <- gam(
   death_count_next_year ~ s(x,y) + s(year, k=3) + s(tot_pop),
   data = train_set_alt, method = "REML", family = nb()
   )
+mean(abs(train_set_alt$death_count_next_year - predict(base_model, train_set_alt, type = "response")))
+sqrt(mean((train_set_alt$death_count_next_year - predict(base_model, train_set_alt, type = "response")) ^ 2))
 summary(base_model)
+gam.check(base_model)
+concurvity(base_model)
+qq.gam(base_model)
+
+
+
+set.seed(2017)
+flds <- createFolds(test_set_alt$death_count_next_year, k = 5, list = TRUE, returnTrain = FALSE)
+full_model_error <- function(fold) {
+  valid_set1 <- train_set_alt[fold, ]
+  train_set1 <- train_set_alt %>% filter(!(id %in% valid_set1$id))
+  model1 <- gam(
+    death_count_next_year ~ s(x,y) + s(year, k=3) + s(tot_pop) + s(med_house_inc) + s(mean_house_inc) + s(at_or_below_pov_prop) + s(pop_struggling_prop) + town_status + urb_v_rur + s(opioid_rate_avg) + s(less_than_hs_ed) + s(alprazolam_per_65_and_over) + s(diazepam_per_65_and_over) + s(lorazepam_per_65_and_over) + s(tot_benzo_per_65_and_over),
+    data = train_set1, method = "REML", family = nb(), select = TRUE
+    )
+  error1 <- mean(abs(valid_set1$death_count_next_year - predict(model1, valid_set1, type = "response")))
+  return(error1)
+}
+full_model_error_all_er <- map_dbl(flds, full_model_error)
+full_model_error_all_er
+mean(full_model_error_all_er)
+
+
+full_model_rmse_error <- function(fold) {
+  valid_set1 <- train_set_alt[fold, ]
+  train_set1 <- train_set_alt %>% filter(!(id %in% valid_set1$id))
+  model1 <- gam(
+    death_count_next_year ~ s(x,y) + s(year, k=3) + s(tot_pop) + s(med_house_inc) + s(mean_house_inc) + s(at_or_below_pov_prop) + s(pop_struggling_prop) + town_status + urb_v_rur + s(opioid_rate_avg) + s(less_than_hs_ed) + s(alprazolam_per_65_and_over) + s(diazepam_per_65_and_over) + s(lorazepam_per_65_and_over) + s(tot_benzo_per_65_and_over),
+    data = train_set1, method = "REML", family = nb(), select = TRUE
+    )
+  error1 <- sqrt(mean((valid_set1$death_count_next_year - predict(model1, valid_set1, type = "response")) ^ 2))
+  return(error1)
+}
+full_model_error_all_rmse_er <- map_dbl(flds, full_model_rmse_error)
+full_model_error_all_rmse_er
+mean(full_model_error_all_rmse_er)
+
+full_model <- gam(
+    death_count_next_year ~ s(x,y) + s(year, k=3) + s(tot_pop) + s(med_house_inc) + s(mean_house_inc) + s(at_or_below_pov_prop) + s(pop_struggling_prop) + town_status + urb_v_rur + s(opioid_rate_avg) + s(less_than_hs_ed) + s(alprazolam_per_65_and_over) + s(diazepam_per_65_and_over) + s(lorazepam_per_65_and_over) + s(tot_benzo_per_65_and_over),
+    data = train_set_alt, method = "REML", family = nb(), select = TRUE
+    )
+mean(abs(train_set_alt$death_count_next_year - predict(full_model, train_set_alt, type = "response")))
+sqrt(mean((train_set_alt$death_count_next_year - predict(full_model, train_set_alt, type = "response")) ^ 2))
+summary(full_model)
+gam.check(full_model)
+concurvity(full_model)
+qq.gam(full_model)
+
+train_set_scaled <- train_set_alt %>% 
+  select(-c(year:death_count_next_year, x:y)) %>% 
+  mutate_if(is.numeric, scale) %>% 
+    bind_cols(
+      train_set_alt %>% 
+        select(year:death_count_next_year, x:y)
+    )
+colnames(train_set_scaled)
+full_model_scaled <- gam(
+    death_count_next_year ~ s(x,y) + s(year, k=3) + s(tot_pop) + s(med_house_inc) + s(mean_house_inc) + s(at_or_below_pov_prop) + s(pop_struggling_prop) + town_status + urb_v_rur + s(opioid_rate_avg) + s(less_than_hs_ed) + s(alprazolam_per_65_and_over) + s(diazepam_per_65_and_over) + s(lorazepam_per_65_and_over) + s(tot_benzo_per_65_and_over),
+    data = train_set_scaled, method = "REML", family = nb(), select = TRUE
+    )
+summary(full_model_scaled)
+mean(abs(train_set_scaled$death_count_next_year - predict(full_model_scaled, train_set_scaled, type = "response")))
+
+concurvity(full_model)
+
+full_model_sub1 <- gam(
+    death_count_next_year ~ s(x,y) + s(year, k=3) + s(tot_pop) + s(mean_house_inc) + s(at_or_below_pov_prop) + s(pop_struggling_prop) + town_status + urb_v_rur + s(opioid_rate_avg) + s(less_than_hs_ed) + s(alprazolam_per_65_and_over) + s(diazepam_per_65_and_over) + s(lorazepam_per_65_and_over),
+    data = train_set_alt, method = "REML", family = nb(), select = TRUE
+    )
+mean(abs(train_set_alt$death_count_next_year - predict(full_model_sub1, train_set_alt, type = "response")))
+sqrt(mean((train_set_alt$death_count_next_year - predict(full_model_sub1, train_set_alt, type = "response")) ^ 2))
+
+
+
+set.seed(2016)
+flds <- createFolds(test_set_alt$death_count_next_year, k = 5, list = TRUE, returnTrain = FALSE)
+full_model_sub1_error <- function(fold) {
+  valid_set1 <- train_set_alt[fold, ]
+  train_set1 <- train_set_alt %>% filter(!(id %in% valid_set1$id))
+  model1 <- gam(
+    death_count_next_year ~ s(x,y) + s(year, k=3) + s(tot_pop) + s(mean_house_inc) + s(at_or_below_pov_prop) + s(pop_struggling_prop) + town_status + urb_v_rur + s(opioid_rate_avg) + s(less_than_hs_ed) + s(alprazolam_per_65_and_over) + s(diazepam_per_65_and_over) + s(lorazepam_per_65_and_over),
+    data = train_set_alt, method = "REML", family = nb(), select = TRUE
+    )
+  error1 <- mean(abs(valid_set1$death_count_next_year - predict(model1, valid_set1, type = "response")))
+  return(error1)
+}
+full_model_sub1_error_all_er <- map_dbl(flds, full_model_sub1_error)
+full_model_sub1_error_all_er
+mean(full_model_sub1_error_all_er)
+
+full_model_sub1_rmse_error <- function(fold) {
+  valid_set1 <- train_set_alt[fold, ]
+  train_set1 <- train_set_alt %>% filter(!(id %in% valid_set1$id))
+  model1 <- gam(
+    death_count_next_year ~ s(x,y) + s(year, k=3) + s(tot_pop) + s(mean_house_inc) + s(at_or_below_pov_prop) + s(pop_struggling_prop) + town_status + urb_v_rur + s(opioid_rate_avg) + s(less_than_hs_ed) + s(alprazolam_per_65_and_over) + s(diazepam_per_65_and_over) + s(lorazepam_per_65_and_over),
+    data = train_set_alt, method = "REML", family = nb(), select = TRUE
+    )
+  error1 <- sqrt(mean((valid_set1$death_count_next_year - predict(model1, valid_set1, type = "response")) ^ 2))
+  return(error1)
+}
+full_model_sub1_error_all_rmse_er <- map_dbl(flds, full_model_sub1_rmse_error)
+full_model_sub1_error_all_rmse_er
+mean(full_model_sub1_error_all_rmse_er)
+
+summary(full_model_sub1)
+gam.check(full_model_sub1)
+concurvity(full_model_sub1)
+qq.gam(full_model_sub1)
+
+```
+
+
+```{r, eval=FALSE}
 
 
 all_acs_model_alt <- gam(
