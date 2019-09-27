@@ -855,6 +855,10 @@ concurvity(final_model)
 
 mean(abs(test_set_alt$death_count_next_year - predict(final_model, test_set_alt, type = "response")))
 sqrt(mean((test_set_alt$death_count_next_year - predict(final_model, test_set_alt, type = "response")) ^ 2))
+sd(test_set_alt$death_count_next_year)
+mean(test_set_alt$death_count_next_year)
+mod_df_count$fin_pred <- predict(final_model, mod_df_count, type = "response")
+
 
 library(mgcViz)
 test <- getViz(final_model)
@@ -906,5 +910,117 @@ mod_df_count %>%
   scale_fill_brewer(type = "seq", name = "Year") +
   xlab("Number of opioid overdose deaths per town") +
   ylab("Year")
+
+mod_df_count %>% 
+  filter(year == 2017) %>% 
+  mutate(year = fct_rev(as_factor(year+1))) %>% 
+  ggplot(aes(death_count_next_year)) +
+  geom_histogram(binwidth = 5) +
+  xlab("Number of Overdose Deaths per Town") +
+  ylab("Count") +
+  theme(
+    axis.text.x = element_text(size = 12),
+    axis.text.y = element_text(size = 12),
+    axis.title = element_text(size = 14)
+    )
+
+
+ma_total_deaths <- read_csv("../../../data/tidy_data/ma_total_overdose_for_graph.csv")
+ma_total_deaths %>% 
+  ggplot(aes(year, overdose_deaths, fill = group)) +
+  geom_bar(stat = "identity") +
+  scale_fill_manual(values=c("grey80", "orange2"), guide=FALSE) +
+  ylab("Number of Deaths") +
+  xlab("Year") +
+  ggtitle("Opioid-related deaths for the state of Massachusetts") +
+  theme(
+    axis.text.x = element_text(size = 12),
+    axis.text.y = element_text(size = 12),
+    axis.title = element_text(size = 14),
+    plot.title = element_text(size = 16)
+    ) +
+  scale_x_continuous(breaks=c(2000, 2014, 2018))
+
+
+#nyc.census.4boro %>% 
+#  ggplot() +
+#  geom_sf(color = "#BFBFBF") +
+#  geom_sf(data = tract.cent, size = 0.75, color = "#4E79A7") +
+#  ggtitle("NYC census tract centroids") + 
+#  theme(axis.text.x = element_blank(), axis.text.y = element_blank())
+
+ma_town_centroids <- st_centroid(ma_town_map_w_data)
+ma_town_map_w_data %>% 
+  ggplot() +
+  geom_sf(color = "grey80") +
+  geom_sf(data = ma_town_centroids, size = 2, color = "orange2") +
+  theme(axis.text.x = element_blank(), axis.text.y = element_blank())
+
+
+mod_df_count %>% 
+  mutate(year = year+1) %>% 
+  ggplot(aes(death_count_next_year, fin_pred)) +
+  geom_point(size=2, alpha=0.5) +
+  geom_smooth(method="lm", se=FALSE, size = 1.5) +
+  geom_abline(intercept = 0, slope = 1, color="orange2", size = 1.5) +
+  scale_y_sqrt(limits=c(0,300)) +
+  scale_x_sqrt(limits=c(0,300)) +
+  ylab("Predicted Count")+
+  xlab("Actual Count") +
+  ggtitle("Predicted vs Actual Opioid Overdose Death Counts\n(sqrt scale)") +
+  theme(
+    axis.text.x = element_text(size = 14),
+    axis.text.y = element_text(size = 14),
+    axis.title = element_text(size = 16),
+    plot.title = element_text(size = 18)
+    )
+mod_df_count$resid <- mod_df_count$death_count_next_year - mod_df_count$fin_pred
+mod_df_count %>% 
+  ggplot(aes(death_count_next_year, resid)) +
+  geom_point(alpha = 0.5) +
+  facet_wrap(~year) +
+  geom_hline(yintercept = 0) +
+  scale_x_sqrt() +
+  xlab("Overdose death count") +
+  ylab("Residual")
+mod_df_death_rate <- mod_df_count %>% 
+  mutate(year=year+1) %>% 
+  select(city_death:death_count_next_year, fin_pred, tot_pop) %>% 
+  mutate(
+    actual_death_rate = death_count_next_year * 10000/ tot_pop,
+    pred_death_rate = fin_pred * 10000/ tot_pop
+  )
+mod_df_death_rate %>% 
+  ggplot(aes(year, pred_death_rate, group = city_death)) +
+  geom_line(alpha = 0.5)
+mod_df_death_rate %>% 
+  ggplot(aes(year, actual_death_rate, group = city_death)) +
+  geom_line(alpha = 0.5)
+mod_df_death_rate %>% 
+  arrange(desc(pred_death_rate))
+mod_df_death_rate %>% 
+  select(city_death:year, actual_death_rate:pred_death_rate) %>% 
+  gather(key="measure", value="value", actual_death_rate:pred_death_rate) %>% 
+  mutate(measure = ifelse(measure=="actual_death_rate", "Actual Death Rate", "Predicted Death Rate")) %>% 
+  ggplot(aes(year, value, group = city_death)) +
+  geom_line(alpha = 0.5) +
+  facet_wrap(~measure) +
+  xlab("Year") +
+  ylab("Rate per 10k residents") +
+  theme(
+    axis.text.x = element_text(size = 14),
+    axis.text.y = element_text(size = 14),
+    axis.title = element_text(size = 16),
+    plot.title = element_text(size = 18),
+    strip.text.x = element_text(size=14) 
+    ) +
+  ggtitle("Actual and Predicted Opioid Overdose Deaths by MA Town\nDeath rate per 10k town residents")
+
+mod_df_death_rate %>% 
+  filter(year == 2016) %>% 
+  arrange(desc(pred_death_rate))
+mod_df_death_rate %>% 
+  filter(year == 2018) %>% 
+  arrange(desc(pred_death_rate))
 ```
 
