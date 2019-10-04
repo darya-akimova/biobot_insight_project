@@ -16,6 +16,7 @@ knitr::opts_chunk$set(echo = TRUE)
 
 ```{r packages, comment=NA}
 library(tidyverse)
+library(cowplot)
 library(viridis)
 library(sf)
 library(mgcv)
@@ -247,12 +248,16 @@ base_model <- gam(
 summary(base_model)
 gam.check(base_model)
 concurvity(base_model)
-qq.gam(base_model, cex = 4, title = "Base model")
+qq.gam(base_model, cex = 4)
 # error on training
 rmse(base_model, train_set)
 # error on validation
 rmse(base_model, valid_set)
 
+mean(train_set$death_count_next_year)
+sd(train_set$death_count_next_year)
+mean(valid_set$death_count_next_year)
+sd(valid_set$death_count_next_year)
 ### all features
 full_model <- gam(
     death_count_next_year ~ s(x,y) + s(year, k=3) + s(tot_pop) + s(med_house_inc) + s(mean_house_inc) + s(at_or_below_pov_prop) + s(pop_struggling_prop) + town_status + urb_v_rur + s(opioid_rate_avg) + s(less_than_hs_ed) + s(alprazolam_per_65_and_over) + s(diazepam_per_65_and_over) + s(lorazepam_per_65_and_over) + s(tot_benzo_per_65_and_over),
@@ -743,15 +748,22 @@ ma_total_deaths %>%
     plot.title = element_text(size = 24)
     ) +
   scale_x_continuous(breaks=c(2000, 2014, 2018))
-
-
-#nyc.census.4boro %>% 
-#  ggplot() +
-#  geom_sf(color = "#BFBFBF") +
-#  geom_sf(data = tract.cent, size = 0.75, color = "#4E79A7") +
-#  ggtitle("NYC census tract centroids") + 
-#  theme(axis.text.x = element_blank(), axis.text.y = element_blank())
-
+ma_total_deaths_for_blog <- ma_total_deaths %>% 
+  ggplot(aes(year, overdose_deaths, fill = group)) +
+  geom_bar(stat = "identity") +
+  scale_fill_manual(values=c("grey80", "orange2"), guide=FALSE) +
+  ylab("Number of Deaths") +
+  xlab("Year") +
+  theme(
+    axis.text.x = element_text(size = 12),
+    axis.text.y = element_text(size = 12),
+    axis.title = element_text(size = 14),
+    plot.title = element_text(size = 16)
+    ) +
+  ggtitle("Total opioid overdose death per year\nMassachusetts") +
+  scale_x_continuous(breaks=c(2002, 2006,2010, 2014, 2018))
+ma_total_deaths_for_blog
+save_plot("./ma_deaths_for_blog.png", ma_total_deaths_for_blog, base_width = 8, base_height=4)
 ma_town_centroids <- st_centroid(ma_town_map_w_data)
 ma_town_map_w_data %>% 
   ggplot() +
@@ -762,6 +774,76 @@ ma_town_map_w_data %>%
     axis.text.y = element_blank(),
     panel.grid.major = element_line(colour = 'transparent')
     )
+
+ma_map_with_towns_and_centroids <- ma_town_map_w_data %>% 
+  ggplot() +
+  geom_sf(color = "grey20") +
+  geom_sf(data = ma_town_centroids, size = 1.5, color = "#d95f02") +
+  theme(
+    axis.text.x = element_blank(),
+    axis.text.y = element_blank(),
+    panel.grid.major = element_line(colour = 'transparent')
+    ) +
+  ggtitle("Massachusetts municipal (city and town) boundaries\nCentroids overlaid") #+ 
+#  theme(
+#    plot.title = element_text(size = 16)
+#    )
+
+ma_count_map_all_data <- ma_town_map %>% 
+  st_transform(crs = "+init=epsg:4326") %>% 
+  mutate(TOWN = str_to_lower(TOWN)) %>% 
+  left_join(death_acs_merge_full, by = c("TOWN" = "city_death"))
+
+
+ma_count_map_all_data %>%
+  ggplot() +
+  geom_sf(aes(fill = `2018`), color = "black") +
+  scale_fill_viridis_c(option = "D", name = "Count") +
+  theme(axis.text.x = element_blank(), axis.text.y = element_blank()) +
+  ggtitle("Opioid overdose death counts per town\n2018")
+
+ma_count_map_all_data$death_18_cut <- cut(ma_count_map_all_data$`2018`, breaks = c(0, 1, 5, 10, 50, 250), include.lowest = TRUE)
+table(ma_count_map_all_data$death_18_cut)
+ma_map_2018_count <- ma_count_map_all_data %>%
+  ggplot() +
+  geom_sf(aes(fill = death_18_cut), color = "gray50") +
+  scale_fill_viridis_d(option = "D", name = "Count\nInterval") +
+  theme(
+    axis.text.x = element_blank(),
+    axis.text.y = element_blank(),
+    panel.grid.major = element_line(colour = 'transparent'),
+    plot.title = element_text(size = 22),
+    legend.text = element_text(size = 16),
+    legend.title = element_text(size = 18)
+    ) +
+  ggtitle("Opioid overdose death counts per town per year\n2018")
+ma_map_2018_count 
+save_plot(
+  filename= "../../../figures/tidy_figures/ma_towns_map_and_deaths_2018.png",
+  ma_map_2018_count,
+  base_height = 5,
+  base_width = 10
+  )
+
+
+death_count_year_hist <- mod_df_count %>% 
+  mutate(year = fct_rev(as_factor(year+1))) %>% 
+  ggplot(aes(death_count_next_year, y = year, fill = year)) +
+  geom_density_ridges(stat = "binline", binwidth=5,draw_baseline = F) +
+  theme_ridges() +
+  scale_y_discrete(expand = c(0.01, 0)) +
+  scale_x_continuous(expand = c(0, 0)) +
+  scale_fill_brewer(type = "seq", name = "Year") +
+  xlab("Number of opioid overdose deaths per town") +
+  ylab("Year") +
+  ggtitle("Opioid overdose death counts distributions")
+
+#save_plot(
+#  filename= "./ma_towns_map_and_deaths_for_blog.png",
+#  plot_grid(ma_map_with_towns_and_centroids, death_count_year_hist, ncol = 1),
+#  base_height = 10,
+#  base_width = 8
+#  )
 
 
 mod_df_count %>% 
