@@ -272,8 +272,23 @@ rmse(full_model, train_set)
 # error on validation
 rmse(full_model, valid_set)
 
+full_model_conc <- concurvity_df(full_model)
+full_model_conc
 
 
+full_model_conc <- full_model_conc %>% 
+  filter(feature != "para") %>% 
+  select(-worst.para) %>% 
+  gather(key="feature2", value="value", -feature) %>% 
+  ggplot(aes(feature, feature2, fill=value)) +
+  geom_raster() +
+  scale_fill_viridis_c() +
+  theme(axis.text.x = element_text(angle=45, hjust=1)) +
+  ggtitle("Concurvity Plot\nFull Model") +
+  xlab("Feature 1") +
+  ylab("Feature 2")
+full_model_conc
+#save_plot(filename = "../../../figures/tidy_figures/full_model_concurvity.png", full_model_conc, base_height = 6, base_width = 8)
 train_set_scaled <- train_set %>% 
   select(-c(year:death_count_next_year, x:y)) %>% 
   mutate_if(is.numeric, scale) %>% 

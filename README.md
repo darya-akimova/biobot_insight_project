@@ -87,8 +87,59 @@ City Health dashboard data at city-level:
 
 * data/tidy_data/500_cities_totpop_metric_pivot_table.csv
 * figures/tidy_figures/500_cities_opioid_corr.png
+* products/notebook_1_city_health_dash_500_cities_opioid_corr.pdf - pdf download of notebook
+
+
+##### Notebook 2: ma_overdose_deaths_by_town_cleanup_and_explore
+
+**Filename:**
+
+`code/cleaning_and_eda/notebook_2_ma_overdose_deaths_by_town_cleanup_and_explore.ipynb`
+
+**Goals/Accomplishments:**
+
+* Explored and small changes to the opioid overdose death count datasets (changed columns, removed rows relating to outside of MA deaths or location unknown counts)
+* Compared opioid overdose death count Table 1 (deaths binned by location of residence of decedent, MA residents only) and Table 2 (deaths binned by location of death occurence)
+* Plots of the death count disributions, correlation between years
+
+
+**Inputs:**
+
+MA opioid overdose death counts by town/city derived from Mass.gov statistics, available as a pdf
+(Opioid-related-Overdose-Deaths-by-City-Town-August-2019.pdf)
+Original source: https://www.mass.gov/lists/current-opioid-statistics
+
+Table 1 (deaths binned by location of residence of decedent, MA residents only)
+* Local Path: `data/raw_data/raw_data/ma_opioid_overdose_death_counts/ma_overdose_death_by_town_2014_2018_table1.csv`
+
+Table 2 (deaths binned by location of death occurence)
+* Local Path: `data/raw_data/raw_data/ma_opioid_overdose_death_counts/ma_overdose_death_by_town_2014_2018_table2.csv`
+
+**Outputs:**
+
+* Opioid overdose deaths by MA town/city Table 1: /data/tidy_data/ma_town_opioid_overdose_death_by_place_of_resid_2014_to_2018.csv
+* Opioid overdose deaths by MA town/city Table 2: /data/tidy_data/ma_town_opioid_overdose_death_by_place_of_death_2014_to_2018.csv
+* pdf notebook report: products/notebook_2_ma_overdose_deaths_by_town_cleanup_and_explore.pdf
+
 
 ### Modeling
+
+##### gam_modeling
+
+**Filename:**
+
+`code/analysis/R_model/gam_modeling.rmd`
+
+**Goals/Accomplishments:**
+
+
+
+**Inputs:**
+
+
+
+**Outputs:**
+
 
 
 ### Results
