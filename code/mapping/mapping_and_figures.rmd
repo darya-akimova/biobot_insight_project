@@ -1,0 +1,117 @@
+---
+title: "Maps and other figures"
+author: "darya akimova"
+date: "10/15/2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Setup
+
+## Packages:
+
+```{r packages, comment=NA}
+library(tidyverse)
+library(cowplot)
+library(viridis)
+library(sf)
+library(mgcv)
+theme_set(theme_minimal())
+```
+
+
+## Data:
+
+```{r data_import, comment=NA}
+death_and_acs_data <- read_csv("../../../data/tidy_data/death_count_norm_to_pop_and_acs_town_demographics_merge.csv")
+ma_town_coord <- read_csv("../../../data/tidy_data/ma_town_crs4326_coords.csv")
+ma_town_map <- st_read("../../../data/raw_data/townssurvey_shp/TOWNSSURVEY_POLYM.shp")
+acs_medicare_opioid_merge <- read_csv("../../../data/tidy_data/acs_medicare_opioid_stats_death_rate.csv")
+death_acs_merge_full <- read_csv("../../../data/tidy_data/death_count_norm_to_pop_and_acs_town_demographics_merge_all_cols.csv")
+ma_total_deaths <- read_csv("../../../data/tidy_data/ma_total_overdose_for_graph.csv")
+```
+
+
+
+```{r}
+
+ma_total_deaths %>% 
+  ggplot(aes(year, overdose_deaths, fill = group)) +
+  geom_bar(stat = "identity") +
+  scale_fill_manual(values=c("grey80", "orange2"), guide=FALSE) +
+  ylab("") +
+  xlab("Year") +
+  ggtitle("Total opioid-related deaths per year\nMassachusetts") +
+  theme(
+    axis.text.x = element_text(size = 24),
+    axis.text.y = element_text(size = 24),
+    axis.title = element_text(size = 24),
+    plot.title = element_text(size = 24)
+    ) +
+  scale_x_continuous(breaks=c(2000, 2014, 2018))
+ma_total_deaths_for_blog <- ma_total_deaths %>% 
+  ggplot(aes(year, overdose_deaths, fill = group)) +
+  geom_bar(stat = "identity") +
+  scale_fill_manual(values=c("grey80", "orange2"), guide=FALSE) +
+  ylab("Number of Deaths") +
+  xlab("Year") +
+  theme(
+    axis.text.x = element_text(size = 12),
+    axis.text.y = element_text(size = 12),
+    axis.title = element_text(size = 14),
+    plot.title = element_text(size = 16)
+    ) +
+  ggtitle("Total opioid overdose death per year\nMassachusetts") +
+  scale_x_continuous(breaks=c(2002, 2006,2010, 2014, 2018))
+ma_total_deaths_for_blog
+#save_plot("./ma_deaths_for_blog.png", ma_total_deaths_for_blog, base_width = 8, base_height=4)
+```
+
+
+```{r}
+ma_town_map_w_data <- ma_town_map %>% 
+  st_transform(crs = "+init=epsg:4326") %>% 
+  mutate(TOWN = str_to_lower(TOWN)) %>% 
+  left_join(death_and_acs_data, by = c("TOWN" = "city_death"))
+ma_town_map_w_data$death_rate_18_cut <- as.character(cut(ma_town_map_w_data$death_rate_18, breaks = seq(0, 15, 5), include.lowest = TRUE))
+ma_town_map_w_data %>%
+  ggplot() +
+  geom_sf(aes(fill = death_rate_18_cut), color = "black") +
+  scale_fill_viridis_d(option = "D", name = "Rate") +
+  theme(axis.text.x = element_blank(), axis.text.y = element_blank()) +
+  ggtitle("Opioid overdose death rate per 10k residents\n2018")
+ma_town_map_w_data %>%
+  ggplot() +
+  geom_sf(aes(fill = death_rate_17), color = "black") +
+  scale_fill_viridis_c(option = "D", name = "Rate") +
+  theme(axis.text.x = element_blank(), axis.text.y = element_blank()) +
+  ggtitle("Opioid overdose death rate per 10k town residents\n2017")
+ma_town_map_w_data %>%
+  ggplot() +
+  geom_sf(aes(fill = death_rate_16), color = "black") +
+  scale_fill_viridis_c(option = "D", name = "Rate") +
+  theme(axis.text.x = element_blank(), axis.text.y = element_blank()) +
+  ggtitle("Opioid overdose death rate per 10k town residents\n2016")
+ma_town_map_w_data %>%
+  ggplot() +
+  geom_sf(aes(fill = death_rate_15), color = "black") +
+  scale_fill_viridis_c(option = "D", name = "Rate") +
+  theme(axis.text.x = element_blank(), axis.text.y = element_blank()) +
+  ggtitle("Opioid overdose death rate per 10k town residents\n2015")
+ma_town_map_w_data %>%
+  ggplot() +
+  geom_sf(aes(fill = death_rate_14), color = "black") +
+  scale_fill_viridis_c(option = "D", name = "Rate") +
+  theme(axis.text.x = element_blank(), axis.text.y = element_blank()) +
+  ggtitle("Opioid overdose death rate per 10k town residents\n2014")
+ma_town_map_w_data %>%
+  ggplot() +
+  geom_sf(aes(fill = death_rate_13), color = "black") +
+  scale_fill_viridis_c(option = "D", name = "Rate") +
+  theme(axis.text.x = element_blank(), axis.text.y = element_blank()) +
+  ggtitle("Opioid overdose death rate per 10k town residents\n2013")
+```
+

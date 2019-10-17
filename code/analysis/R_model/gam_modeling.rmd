@@ -18,7 +18,7 @@ knitr::opts_chunk$set(echo = TRUE)
 library(tidyverse)
 library(cowplot)
 library(viridis)
-library(sf)
+#library(sf)
 library(mgcv)
 theme_set(theme_minimal())
 ```
@@ -27,86 +27,15 @@ theme_set(theme_minimal())
 ## Data:
 
 ```{r data_import, comment=NA}
-death_and_acs_data <- read_csv("../../../data/tidy_data/death_count_norm_to_pop_and_acs_town_demographics_merge.csv")
 ma_town_coord <- read_csv("../../../data/tidy_data/ma_town_crs4326_coords.csv")
-ma_town_map <- st_read("../../../data/raw_data/townssurvey_shp/TOWNSSURVEY_POLYM.shp")
+#ma_town_map <- st_read("../../../data/raw_data/townssurvey_shp/TOWNSSURVEY_POLYM.shp")
 acs_medicare_opioid_merge <- read_csv("../../../data/tidy_data/acs_medicare_opioid_stats_death_rate.csv")
 death_acs_merge_full <- read_csv("../../../data/tidy_data/death_count_norm_to_pop_and_acs_town_demographics_merge_all_cols.csv")
 benzo_pres <- read_csv("../../../data/tidy_data/med_partD_benzo_sum_w_town_merge_13_to_17.csv")
 ```
 
 
-# EDA and Feature Engineering
-
-## Data structure
-
-```{r data_glimpse, comment=NA}
-glimpse(death_and_acs_data)
-glimpse(ma_town_coord)
-```
-
-
-## Joining datasets
-
-```{r}
-acs_data_w_geospatial <- death_and_acs_data %>% 
-  inner_join(ma_town_coord, by = c("city_death" = "town"))
-ma_town_map_w_data <- ma_town_map %>% 
-  st_transform(crs = "+init=epsg:4326") %>% 
-  mutate(TOWN = str_to_lower(TOWN)) %>% 
-  left_join(death_and_acs_data, by = c("TOWN" = "city_death"))
-```
-
-
-```{r mapping, comment=NA}
-ma_town_map_w_data$death_rate_18_cut <- as.character(cut(ma_town_map_w_data$death_rate_18, breaks = seq(0, 15, 5), include.lowest = TRUE))
-ma_town_map_w_data %>%
-  ggplot() +
-  geom_sf(aes(fill = death_rate_18_cut), color = "black") +
-  scale_fill_viridis_d(option = "D", name = "Rate") +
-  theme(axis.text.x = element_blank(), axis.text.y = element_blank()) +
-  ggtitle("Opioid overdose death rate per 10k residents\n2018")
-ma_town_map_w_data %>%
-  ggplot() +
-  geom_sf(aes(fill = death_rate_17), color = "black") +
-  scale_fill_viridis_c(option = "D", name = "Rate") +
-  theme(axis.text.x = element_blank(), axis.text.y = element_blank()) +
-  ggtitle("Opioid overdose death rate per 10k town residents\n2017")
-ma_town_map_w_data %>%
-  ggplot() +
-  geom_sf(aes(fill = death_rate_16), color = "black") +
-  scale_fill_viridis_c(option = "D", name = "Rate") +
-  theme(axis.text.x = element_blank(), axis.text.y = element_blank()) +
-  ggtitle("Opioid overdose death rate per 10k town residents\n2016")
-ma_town_map_w_data %>%
-  ggplot() +
-  geom_sf(aes(fill = death_rate_15), color = "black") +
-  scale_fill_viridis_c(option = "D", name = "Rate") +
-  theme(axis.text.x = element_blank(), axis.text.y = element_blank()) +
-  ggtitle("Opioid overdose death rate per 10k town residents\n2015")
-ma_town_map_w_data %>%
-  ggplot() +
-  geom_sf(aes(fill = death_rate_14), color = "black") +
-  scale_fill_viridis_c(option = "D", name = "Rate") +
-  theme(axis.text.x = element_blank(), axis.text.y = element_blank()) +
-  ggtitle("Opioid overdose death rate per 10k town residents\n2014")
-ma_town_map_w_data %>%
-  ggplot() +
-  geom_sf(aes(fill = death_rate_13), color = "black") +
-  scale_fill_viridis_c(option = "D", name = "Rate") +
-  theme(axis.text.x = element_blank(), axis.text.y = element_blank()) +
-  ggtitle("Opioid overdose death rate per 10k town residents\n2013")
-```
-
-
-# Modeling
-
-## Model
-
-```{r}
-acs_medicare_opioid_merge
-death_acs_merge_full
-```
+# Dataset prep
 
 
 ```{r}
@@ -187,42 +116,39 @@ sapply(data.frame(sapply(mod_df_count, is.na)), sum)
 ```
 
 
-Alternative test/train split testing, not used
-
-```{r, eval=FALSE}
-library(caret)
-mod_df_count <- mod_df_count %>% 
-  arrange(year, city_death)
-mod_df_count %>% 
-  count(year)
-towns_to_leave <- mod_df_count %>% 
-  count(city_death) %>% 
-  filter(n >= 5)
-mod_df_count <- mod_df_count %>% 
-  filter(city_death %in% towns_to_leave$city_death) %>% 
-  arrange(year, city_death)
-
-flds <- createTimeSlices(mod_df_count$death_count_next_year, initialWindow = 246, horizon = 2, fixedWindow = TRUE)
-names(flds)[1] <- "train"
-```
+# Modeling
 
 
+## Data Split
+
+Here, the years refer to the feature years (the outcome variable is actually the 2018 opioid overdose death count).
+
+Train set: 2014-2016(2013-2015 below)
+Validation set: 2017 (2016 below)
+Test set (for final model): 2018 (2017 below)
 
 
-```{r}
+```{r data_split}
 test_set <- mod_df_count %>% 
   filter(year == 2017)
-
-
-mean(mod_df_count$death_count_next_year)
-var(mod_df_count$death_count_next_year)
-
 valid_set <- mod_df_count %>% 
   filter(year == 2016)
 train_set <- mod_df_count %>% 
   filter(year < 2016)
 train_set %>% 
   count(year)
+mean(mod_df_count$death_count_next_year)
+var(mod_df_count$death_count_next_year)
+```
+
+
+Note: Variance =/= Mean - data is overdispersed and a poisson is not appropriate - try negative binomial distribution.
+
+## Functions
+
+Simple functions to calculate RMSE error to evaluate the model performace and a function to tidy up the concurvity dataframe output by mgcv (converts to a dataframe and select out the "worst" case concurvity):
+
+```{r functions}
 # rmse error calc to evaluate models
 rmse <- function(model, df) {
   rmse_error <- (df$death_count_next_year - predict(model, df, type = "response")) ^ 2 %>% 
@@ -240,7 +166,17 @@ concurvity_df <- function(model) {
     select(feature, contains("worst"))
   return(worst_conc_tbl)
 }
+```
 
+
+## Model building - feature selection and parameter tuning
+
+Base model - only the required variables of:
+* geospatial coordinates, incorporated as an interaction term s(x, y) - centroids of the municipalities left in the dataset
+* population to normalize opioid overdose death counts
+* year
+
+```{r base_model}
 base_model <- gam(
   death_count_next_year ~ s(x,y) + s(year, k = 3) + s(tot_pop),
   data = train_set, method = "REML", family = nb()
@@ -258,6 +194,15 @@ mean(train_set$death_count_next_year)
 sd(train_set$death_count_next_year)
 mean(valid_set$death_count_next_year)
 sd(valid_set$death_count_next_year)
+```
+
+Error on training data slightly smaller than the mean, but error slightly larger than the mean for the validations set. Both smaller than the standard deviation.
+
+
+Full model to get a sense of other extreme (will likely overfit the data):
+
+
+```{r full_model}
 ### all features
 full_model <- gam(
     death_count_next_year ~ s(x,y) + s(year, k=3) + s(tot_pop) + s(med_house_inc) + s(mean_house_inc) + s(at_or_below_pov_prop) + s(pop_struggling_prop) + town_status + urb_v_rur + s(opioid_rate_avg) + s(less_than_hs_ed) + s(alprazolam_per_65_and_over) + s(diazepam_per_65_and_over) + s(lorazepam_per_65_and_over) + s(tot_benzo_per_65_and_over),
@@ -271,11 +216,34 @@ qq.gam(full_model, cex = 4)
 rmse(full_model, train_set)
 # error on validation
 rmse(full_model, valid_set)
+```
 
+
+Notes:
+
+GAM Summary:
+* tot_benzo_per_65_and_over - shrunken coefficient and not significant
+* diazepam_per_65_and_over - not significant
+* urb_v_rururban  - not significant
+
+GAM check:
+* many features have significant p-value - indicator that more basis functions may be needed
+* will keep running gam check, but will largely ignore the basis-function stat test until the list of features in the model is finalized
+
+Concurvity:
+* Concurvity very high (0.9-1 for most features) - definitely need to remove features
+
+RMSE Error:
+* both train and validation error lower than the base model, but that's not too surprising
+
+
+Concurvity check on pairs of individual features:
+
+```{r full_model_concurvity}
 full_model_conc <- concurvity_df(full_model)
+# result:
 full_model_conc
-
-
+# heatmap plot
 full_model_conc <- full_model_conc %>% 
   filter(feature != "para") %>% 
   select(-worst.para) %>% 
@@ -288,7 +256,21 @@ full_model_conc <- full_model_conc %>%
   xlab("Feature 1") +
   ylab("Feature 2")
 full_model_conc
+# save for blog:
 #save_plot(filename = "../../../figures/tidy_figures/full_model_concurvity.png", full_model_conc, base_height = 6, base_width = 8)
+```
+
+Concurvity 0 (best) - 1 (worst)
+
+* diazepam and tot_benzo were not predictive and also have very high concurvity with several features - good candidates for removal
+* median and mean income are basically the same feature - will have to pick one
+
+
+Q: Does it matter if the data is scaled? Should not because a GAM is a nonlinear type of modeling, but worth it to check.
+
+
+```{r full_model_scaled}
+# scale training data:
 train_set_scaled <- train_set %>% 
   select(-c(year:death_count_next_year, x:y)) %>% 
   mutate_if(is.numeric, scale) %>% 
@@ -305,11 +287,17 @@ summary(full_model_scaled)
 summary(full_model)
 # error on training
 rmse(full_model_scaled, train_set_scaled)
-# same model
+```
 
 
-### scaling back
-# take out med_house_inc (high concurvity with mean_house_inc) and tot_benzo_per_65_and_over
+Scaling and not scaling outputs the same model - good. Don't need to scale, makes for a simpler workflow.
+
+
+Now start removing features. For this version, remove:
+* med_house_inc
+* tot_benzo_per_65_and_over
+
+```{r full_sub1}
 full_model_sub1 <- gam(
     death_count_next_year ~ s(x,y) + s(year, k=3) + s(tot_pop) + s(mean_house_inc) + s(at_or_below_pov_prop) + s(pop_struggling_prop) + town_status + urb_v_rur + s(opioid_rate_avg) + s(less_than_hs_ed) + s(alprazolam_per_65_and_over) + s(diazepam_per_65_and_over) + s(lorazepam_per_65_and_over),
     data = train_set, method = "REML", family = nb(), select = TRUE
@@ -322,12 +310,30 @@ qq.gam(full_model_sub1, cex = 4)
 rmse(full_model_sub1, train_set)
 # error on validation
 rmse(full_model_sub1, valid_set)
+```
 
-### concurvity check
+
+Notes:
+
+GAM Summary:
+* now at_or_below_pov_prop no longer significant
+* diazepam_per_65_and_over and urb_v_rururban still not significant
+
+GAM check:
+* still ignoring this mostly 
+
+Concurvity:
+* Concurvity still high, but most have gone down at least a little bit
+
+RMSE Error:
+* train error higher
+* validation error slightly lower (may not be meaningful), could be sign I'm not overfitting as much as full model
+
+
+Individual feature concurvity check:
+
+```{r full_sub1_concurvity}
 full_model_sub1_conc <- concurvity_df(full_model_sub1)
-full_model_sub1_conc
-
-
 full_model_sub1_conc %>% 
   gather(key="feature2", value="value", -feature) %>% 
   ggplot(aes(feature, feature2, fill=value)) +
@@ -337,9 +343,15 @@ full_model_sub1_conc %>%
   ggtitle("Concurvity plot\nFull Model - sub 1")
 full_model_sub1_conc %>% 
   select(feature, contains("per_65_and_over"))
-# diazepam is not very predictive (p-val not sig) and has high concurvity with more predictive features
+```
 
-### sub 2 - take out diazepam term
+
+Diazepam is not very predictive (p-val not sig) and has high concurvity with more predictive features - remove.
+
+
+Sub 2 - take out diazepam term:
+
+```{r full_sub2}
 full_model_sub2 <- gam(
     death_count_next_year ~ s(x,y) + s(year, k=3) + s(tot_pop) + s(mean_house_inc) + s(at_or_below_pov_prop) + s(pop_struggling_prop) + town_status + urb_v_rur + s(opioid_rate_avg) + s(less_than_hs_ed) + s(alprazolam_per_65_and_over) + s(lorazepam_per_65_and_over),
     data = train_set, method = "REML", family = nb(), select = TRUE
@@ -352,16 +364,44 @@ qq.gam(full_model_sub2, cex = 4)
 rmse(full_model_sub2, train_set)
 # error on validation
 rmse(full_model_sub2, valid_set)
+```
 
-### concurvity check
+
+Notes:
+
+GAM Summary:
+* at_or_below_pov_prop and urb_v_rururban still not significant
+
+GAM check:
+* still ignoring this mostly 
+
+Concurvity:
+* lorazepam and alprazolam concurvities below/close to "removal" threshold of 0.84 now
+
+RMSE Error:
+* training error about the same as previous iteration (sub1)
+* validation error slightly less than previous iteration (sub1)
+
+
+Individual feature concurvity check:
+
+* the 2 poverty metrics (at_or_below_pov_prop, pop_struggling_prop) are good candidates for removing one of them to reduce concurvity further
+
+```{r full_sub2_concurvity}
 full_model_sub2_conc <- concurvity_df(full_model_sub2)
-full_model_sub2_conc 
 full_model_sub2_conc %>% 
-  select(feature, contains("below_pov")) %>% 
+  select(feature, contains("prop")) %>% 
   arrange(desc(worst.s.at_or_below_pov_prop.))
-# remove at or below poverty
+# sum of these individual concurvity values:
+full_model_sub2_conc %>% 
+  select(contains("prop")) %>% 
+  summarize_all(sum)
+```
+
+`at_or_below_pov_prop` has a slightly higher total concurvity with the other features in the model - try removing it first. 
 
 
+```{r full_sub3}
 full_model_sub3 <- gam(
     death_count_next_year ~ s(x,y) + s(year, k=3) + s(tot_pop) + s(mean_house_inc) + s(pop_struggling_prop) + town_status + urb_v_rur + s(opioid_rate_avg) + s(less_than_hs_ed) + s(alprazolam_per_65_and_over) + s(lorazepam_per_65_and_over),
     data = train_set, method = "REML", family = nb(), select = TRUE
@@ -374,16 +414,39 @@ qq.gam(full_model_sub3, cex = 4)
 rmse(full_model_sub3, train_set)
 # error on validation
 rmse(full_model_sub3, valid_set)
-  
-### concurvity check
+```
+
+Notes:
+
+GAM Summary:
+* urb_v_rururban and now alprazolam_per_65_and_over not significant
+
+GAM check:
+* still ignoring this mostly - alprazolam_per_65_and_over consistently significant, may need more basis functions?
+
+Concurvity:
+* will continue to ignore total population, needs to be in the model
+* pop_struggling_prop, mean_house_inc, less_than_hs_ed still high
+
+RMSE Error:
+* error on both training and validation are both slightly up, but that feature had to be removed because of high concurvity
+
+
+Individual feature concurvity check:
+
+* what does total population have high concurvity with?
+
+```{r full_sub3_concurvity}
 full_model_sub3_conc <- concurvity_df(full_model_sub3)
 full_model_sub3_conc %>% 
   select(feature, contains("tot_pop")) %>% 
   arrange(desc(worst.s.tot_pop.))
-# remove at or below poverty
+```
 
 
-### take out urban v rural from sub 3 - not informative
+Sub4 - remove at or below poverty - not informative/predictive
+
+```{r full_sub4}
 full_model_sub4 <- gam(
     death_count_next_year ~ s(x,y) + s(year, k=3) + s(tot_pop) + s(mean_house_inc) + s(pop_struggling_prop) + town_status + s(opioid_rate_avg) + s(less_than_hs_ed) + s(alprazolam_per_65_and_over) + s(lorazepam_per_65_and_over),
     data = train_set, method = "REML", family = nb(), select = TRUE
@@ -396,12 +459,44 @@ qq.gam(full_model_sub4, cex = 4)
 rmse(full_model_sub4, train_set)
 # error on validation
 rmse(full_model_sub4, valid_set)
+```
 
-### concurvity check
+Notes:
+
+GAM Summary:
+* all features statistically significant except alprazolam_per_65_and_over, will leave it in until I deal with all the other concurvity issues
+
+GAM check:
+* still mostly ignoring this
+
+Concurvity:
+* mean_house_inc, pop_struggling_prop, less_than_hs_ed still have overall worst-case concurvity estimates over the desired threshold of 0.84
+
+RMSE Error:
+* train error slightly up
+* but validation error went down by quite a bit (relatively speaking)
+
+
+Individual feature concurvity check:
+
+```{r full_sub4_concurvity}
 full_model_sub4_conc <- concurvity_df(full_model_sub4)
-full_model_sub4_conc
+full_model_sub4_conc %>% 
+  gather(key="feature2", value="value", -feature) %>% 
+  ggplot(aes(feature, feature2, fill=value)) +
+  geom_raster() +
+  scale_fill_viridis_c() +
+  theme(axis.text.x = element_text(angle=45, hjust=1)) +
+  ggtitle("Concurvity plot\nFull Model - sub 4")
+```
 
-### test another type of interaction term
+
+* mean_house_inc, pop_struggling_prop, less_than_hs_ed seem to have relatively high concurvity with each other
+
+
+Before moving on, try out another type of interaction term between x, y, and total population
+
+```{r full_sub5}
 full_model_sub5 <- gam(
     death_count_next_year ~ s(x,y) + s(year, k=3) + s(tot_pop) + s(mean_house_inc) + s(pop_struggling_prop) + town_status + s(opioid_rate_avg) + s(less_than_hs_ed) + s(alprazolam_per_65_and_over) + s(lorazepam_per_65_and_over) + ti(x, y, tot_pop, d=c(2, 1)),
     data = train_set, method = "REML", family = nb(), select = TRUE
@@ -414,31 +509,49 @@ qq.gam(full_model_sub5, cex = 4)
 rmse(full_model_sub5, train_set)
 # error on validation
 rmse(full_model_sub5, valid_set)
+```
 
 
-### back pedal - take that out and go back to sub 4 - look at interaction between terms
-#s(mean_house_inc)   
-#s(pop_struggling_prop
-train_set %>% 
-  ggplot(aes(mean_house_inc, pop_struggling_prop)) +
-  geom_point(size = 2, alpha = 0.5)
+Notes:
+
+* Concurvities overall went way up again
+* Error on validation went way up again too
+
+
+Back pedal - take that out and go back to sub 4 - look at interaction between terms mean_house_inc, pop_struggling_prop, and less_than_hs_ed 
+
+
+```{r full_sub4_concurvity}
+# mean income concurvity
 full_model_sub4_conc %>% 
   select(feature, contains("mean")) %>% 
   arrange(desc(worst.s.mean_house_inc.))
+# hs education concurvity
 full_model_sub4_conc %>% 
   select(feature, contains("hs")) %>% 
   arrange(desc(worst.s.less_than_hs_ed.))
 train_set %>% 
+  ggplot(aes(mean_house_inc, pop_struggling_prop)) +
+  geom_point(size = 2, alpha = 0.5) +
+  ggtitle("Relationship between mean house income\nand proportion of population struggling (poverty measure)\nTraining set")
+train_set %>% 
   ggplot(aes(mean_house_inc, less_than_hs_ed)) +
-  geom_point(size = 2, alpha = 0.5)
+  geom_point(size = 2, alpha = 0.5) +
+  ggtitle("Relationship between mean house income\nand proportion with less than HS education\nTraining set")
 train_set %>% 
   ggplot(aes(pop_struggling_prop, less_than_hs_ed)) +
-  geom_point(size = 2, alpha = 0.5)
+  geom_point(size = 2, alpha = 0.5) +
+  ggtitle("Relationship between proportion of population struggling (poverty measure)\nand proportion with less than HS education\nTraining set")
 full_model_sub4_conc %>% 
   select(feature, contains("tot_pop")) %>% 
   arrange(desc(worst.s.tot_pop.))
+```
 
-### sub 4 - less_than_hs_ed
+
+`less_than_hs_ed` has high concurvity with mean income and total population - try removing it
+
+
+```{r full_sub6}
 full_model_sub6 <- gam(
     death_count_next_year ~ s(x,y) + s(year, k=3) + s(tot_pop) + s(mean_house_inc) + s(pop_struggling_prop) + town_status + s(opioid_rate_avg) + s(alprazolam_per_65_and_over) + s(lorazepam_per_65_and_over),
     data = train_set, method = "REML", family = nb(), select = TRUE
@@ -451,10 +564,30 @@ qq.gam(full_model_sub6, cex = 4)
 rmse(full_model_sub6, train_set)
 # error on validation
 rmse(full_model_sub6, valid_set)
+```
 
-### concurvity check
+
+Notes:
+
+GAM Summary:
+* alprazolam_per_65_and_over not significant
+
+GAM check:
+* maybe it's time to try upping the k for some of these features?
+
+Concurvity:
+* `mean_house_inc` and `pop_struggling_prop` still have high worst-case concurvity
+
+RMSE Error:
+* train error slightly up from previous iteration (sub4)
+* validation error slight down from previous iteration (sub4)
+
+
+Individual feature concurvity check:
+
+
+```{r full_sub6_concurvity}
 full_model_sub6_conc <- concurvity_df(full_model_sub6)
-full_model_sub6_conc
 full_model_sub6_conc %>% 
   gather(key="feature2", value="value", -feature) %>% 
   ggplot(aes(feature, feature2, fill=value)) +
@@ -462,9 +595,14 @@ full_model_sub6_conc %>%
   scale_fill_viridis_c() +
   theme(axis.text.x = element_text(angle=45, hjust=1)) +
   ggtitle("Concurvity plot\nFull Model - Sub 6")
+```
 
 
-### try giving higher k to terms
+* `mean_house_inc` and `pop_struggling_prop` still have high worst-case concurvity with each other - need to pick one
+
+Try giving higher k to terms first - not sure if that will increase or decrease concurvity
+
+```{r full_sub7}
 full_model_sub7 <- gam(
     death_count_next_year ~ s(x,y) + s(year, k=3) + s(tot_pop, k = 12) + s(mean_house_inc, k = 12) + s(pop_struggling_prop, k =12) + town_status + s(opioid_rate_avg) + s(alprazolam_per_65_and_over, k = 12) + s(lorazepam_per_65_and_over),
     data = train_set, method = "REML", family = nb(), select = TRUE
@@ -478,9 +616,26 @@ rmse(full_model_sub7, train_set)
 # error on validation
 rmse(full_model_sub7, valid_set)
 rmse(full_model_sub6, valid_set)
+```
+
+Notes:
+
+GAM Summary:
+* alprazolam_per_65_and_over not significant
+
+GAM check:
+* although the k's have been increased, the p-values still indicate that more are needed - not sure if it's worth it (will likely lead to worse overfitting)
+
+Concurvity:
+* Worst-case concurvity metrics didn't change between sub 6 and this iteration 
+
+RMSE Error:
+* Validation error went up slightly
 
 
-# back pedal
+Likely not worth trying to change k at this point. Back pedal to previous iteration (sub 6) - check concurvities between mean income and population proportion that's struggling
+
+```{r full_sub6_concurvity_ind}
 full_model_sub6_conc %>% 
   select(feature, contains("mean")) %>% 
   arrange(desc(worst.s.mean_house_inc.))
@@ -490,8 +645,14 @@ full_model_sub6_conc %>%
 sum(full_model_sub6_conc$worst.s.mean_house_inc.)
 sum(full_model_sub6_conc$worst.s.pop_struggling_prop.)
 summary(full_model_sub6)
+```
 
-# model 6, but take out alprazolam - does it make a diffrence?
+* The two features are pretty similar, not sure which to take out
+
+Try sub 6, but take out alprazolam - does it make a diffrence?
+
+
+```{r full_sub8}
 full_model_sub8 <- gam(
     death_count_next_year ~ s(x,y) + s(year, k=3) + s(tot_pop) + s(mean_house_inc) + s(pop_struggling_prop) + town_status + s(opioid_rate_avg) + s(lorazepam_per_65_and_over),
     data = train_set, method = "REML", family = nb(), select = TRUE
@@ -505,10 +666,27 @@ rmse(full_model_sub8, train_set)
 # error on validation
 rmse(full_model_sub8, valid_set)
 rmse(full_model_sub6, valid_set)
-## taking out alprazolam makes model slightly worse
+```
 
 
-# model 6- but take out mean house inc - strong relationship with pop struggling and x,y
+Notes:
+
+GAM Summary:
+* All features now have a p-value < 0.05
+
+GAM check:
+* Not much has changed
+
+Concurvity:
+* Wost-case concurvity of `lorazepam_per_65_and_over` with the model has gone way down, but not surpsing since it had a strong relationship with alprazolam feature
+
+RMSE Error:
+* Validation error slightly worse and concurvity between mean income and poverty metric didn't change much, maybe wait and see to remove alprazolam?
+
+
+Try: sub 6 - but take out mean house inc - strong relationship with pop struggling and x,y:
+
+```{r full_sub9}
 full_model_sub9 <- gam(
     death_count_next_year ~ s(x,y) + s(year, k=3) + s(tot_pop) + s(pop_struggling_prop) + town_status + s(opioid_rate_avg) + s(alprazolam_per_65_and_over) + s(lorazepam_per_65_and_over),
     data = train_set, method = "REML", family = nb(), select = TRUE
@@ -522,13 +700,27 @@ rmse(full_model_sub9, train_set)
 # error on validation
 rmse(full_model_sub9, valid_set)
 rmse(full_model_sub6, valid_set)
-# model is a lot worse again
+```
 
-### concurvity check
-full_model_sub9_conc <- concurvity_df(full_model_sub9)
-full_model_sub9_conc
 
-# try taking out povertyfrom model sub 6 instead?
+Notes:
+
+GAM Summary:
+* `alprazolam_per_65_and_over` now significant predictor
+
+GAM check:
+* ignore
+
+Concurvity:
+* all features now have worst-case concurvity estimates below the desired threshold of 0.84
+
+RMSE Error:
+* Error on validation is much higher with this iteration than the previous one (sub6)
+
+
+Try taking out poverty metric from model sub 6 instead? Will the validation error be lower with version sub 9 or sub 10?
+
+```{r full_sub10}
 full_model_sub10 <- gam(
     death_count_next_year ~ s(x,y) + s(year, k=3) + s(tot_pop) + s(mean_house_inc) + town_status + s(opioid_rate_avg) + s(alprazolam_per_65_and_over) + s(lorazepam_per_65_and_over),
     data = train_set, method = "REML", family = nb(), select = TRUE
@@ -542,8 +734,30 @@ rmse(full_model_sub10, train_set)
 # error on validation
 rmse(full_model_sub10, valid_set)
 rmse(full_model_sub6, valid_set)
+```
 
-# try raising k again, but on mod 10
+
+Notes:
+
+GAM Summary:
+* alprazolam_per_65_and_over significant predictor with this model again too
+
+GAM check:
+* ignore
+
+Concurvity:
+* all concurvity metrics below desired threshold of 0.84 with this version also
+
+RMSE Error:
+* Validation error actually went down between previous iteration (sub6) and this one, much better than when the mean income was removed (sub9)
+
+
+- Features tentatively finalized
+
+
+Try raising k again (because of gam check results), but on mod 10 - does it make a differnce? Improve fit?
+
+```{r full_sub11}
 full_model_sub11 <- gam(
     death_count_next_year ~ s(x,y, k = 45) + s(year, k=3) + s(tot_pop, k = 15) + s(mean_house_inc, k = 15) + town_status + s(opioid_rate_avg) + s(alprazolam_per_65_and_over, k = 15) + s(lorazepam_per_65_and_over),
     data = train_set, method = "REML", family = nb(), select = TRUE
@@ -557,18 +771,28 @@ rmse(full_model_sub11, train_set)
 # error on validation
 rmse(full_model_sub11, valid_set)
 rmse(full_model_sub10, valid_set)
+```
 
-### concurvity check
-full_model_sub10_conc <- concurvity_df(full_model_sub10)
-full_model_sub10_conc %>% 
-  select(feature, contains("per_65")) %>% 
-  arrange(desc(worst.s.alprazolam_per_65_and_over.))
-full_model_sub11_conc <- concurvity_df(full_model_sub11)
-full_model_sub11_conc %>% 
-  select(feature, contains("per_65")) %>% 
-  arrange(desc(worst.s.alprazolam_per_65_and_over.))
 
-# try rolling back k for x,y and mean house inc
+Notes:
+
+GAM Summary:
+* All features still significant
+
+GAM check:
+* Increasing k doesn't seem to have done much - all features that had a p < 0.05 also have a p < 0.05 in this version. Is it worth it to raise k?
+
+Concurvity:
+* Worst-case concurvity estimates for `alprazolam_per_65_and_over` and  `lorazepam_per_65_and_over` are now at/above desired threshold of 0.84.
+
+RMSE Error:
+* Validation error slightly up
+
+- Not worth it - likely increasing overfitting here with little to no benefit
+
+Try rolling back k for x,y and mean house inc?
+
+```{r full_sub12}
 full_model_sub12 <- gam(
     death_count_next_year ~ s(x,y) + s(year, k=3) + s(tot_pop, k = 15) + s(mean_house_inc) + town_status + s(opioid_rate_avg) + s(alprazolam_per_65_and_over, k = 15) + s(lorazepam_per_65_and_over),
     data = train_set, method = "REML", family = nb(), select = TRUE
@@ -584,10 +808,19 @@ rmse(full_model_sub10, train_set)
 rmse(full_model_sub12, valid_set)
 rmse(full_model_sub11, valid_set)
 rmse(full_model_sub10, valid_set)
+```
 
-## last shot - try tuning up k for alprazolam
+
+Notes:
+
+* Again, error doesn't change much and there doesn't seem to be a benefit to making the model more flexible by increasing k
+
+
+Last sattempt to tweak k - try tuning up k for alprazolam and total population only (highest p-value)
+
+```{r full_sub13}
 full_model_sub13 <- gam(
-    death_count_next_year ~ s(x,y) + s(year, k=3) + s(tot_pop, k = 15) + s(mean_house_inc) + town_status + s(opioid_rate_avg) + s(alprazolam_per_65_and_over, k = 18) + s(lorazepam_per_65_and_over),
+    death_count_next_year ~ s(x,y) + s(year, k=3) + s(tot_pop) + s(mean_house_inc) + town_status + s(opioid_rate_avg) + s(alprazolam_per_65_and_over, k = 18) + s(lorazepam_per_65_and_over),
     data = train_set, method = "REML", family = nb(), select = TRUE
     )
 summary(full_model_sub13)
@@ -602,12 +835,17 @@ rmse(full_model_sub13, valid_set)
 rmse(full_model_sub12, valid_set)
 rmse(full_model_sub11, valid_set)
 rmse(full_model_sub10, valid_set)
+```
 
-### higher k doesn't seem to make the model better - go with model 10
 
+Model is now much, much worse - just go with model iteration 10 as the final formulation.
+
+
+Retrain this formulation on the 2014-2017 data (2013-2016 here)
+
+```{r final_model_train_eval}
 train_full <- mod_df_count %>% 
   filter(year < 2017)
-
 final_model <- gam(
     death_count_next_year ~ s(x,y) + s(year, k=3) + s(tot_pop) + s(mean_house_inc) + town_status + s(opioid_rate_avg) + s(alprazolam_per_65_and_over) + s(lorazepam_per_65_and_over),
     data = train_full, method = "REML", family = nb(), select = TRUE
@@ -623,12 +861,25 @@ rmse(full_model_sub10, test_set)
 rmse(final_model, test_set)
 mean(test_set$death_count_next_year)
 sd(test_set$death_count_next_year)
+```
+
+
+Retraining gave a big boost to the predictive power - small difference between training and test set errors suggests that overfitting is not too big of a problem.
+
+
+Final predictions:
+
+```{r predictions}
 test_set$fin_pred <- predict(final_model, test_set, type = "response")
 sd(test_set$fin_pred)
 mod_df_count$fin_pred <- predict(final_model, mod_df_count, type = "response")
+```
 
 
+## Model visualizations
 
+
+```{r model_viz}
 library(mgcViz)
 test <- getViz(final_model)
 qq(test, rep = 10, method = "simul1", CI = "normal", showReps = TRUE,
@@ -748,37 +999,7 @@ mod_df_count %>%
     )
 
 
-ma_total_deaths <- read_csv("../../../data/tidy_data/ma_total_overdose_for_graph.csv")
-ma_total_deaths %>% 
-  ggplot(aes(year, overdose_deaths, fill = group)) +
-  geom_bar(stat = "identity") +
-  scale_fill_manual(values=c("grey80", "orange2"), guide=FALSE) +
-  ylab("") +
-  xlab("Year") +
-  ggtitle("Total opioid-related deaths per year\nMassachusetts") +
-  theme(
-    axis.text.x = element_text(size = 24),
-    axis.text.y = element_text(size = 24),
-    axis.title = element_text(size = 24),
-    plot.title = element_text(size = 24)
-    ) +
-  scale_x_continuous(breaks=c(2000, 2014, 2018))
-ma_total_deaths_for_blog <- ma_total_deaths %>% 
-  ggplot(aes(year, overdose_deaths, fill = group)) +
-  geom_bar(stat = "identity") +
-  scale_fill_manual(values=c("grey80", "orange2"), guide=FALSE) +
-  ylab("Number of Deaths") +
-  xlab("Year") +
-  theme(
-    axis.text.x = element_text(size = 12),
-    axis.text.y = element_text(size = 12),
-    axis.title = element_text(size = 14),
-    plot.title = element_text(size = 16)
-    ) +
-  ggtitle("Total opioid overdose death per year\nMassachusetts") +
-  scale_x_continuous(breaks=c(2002, 2006,2010, 2014, 2018))
-ma_total_deaths_for_blog
-save_plot("./ma_deaths_for_blog.png", ma_total_deaths_for_blog, base_width = 8, base_height=4)
+
 ma_town_centroids <- st_centroid(ma_town_map_w_data)
 ma_town_map_w_data %>% 
   ggplot() +
@@ -833,12 +1054,12 @@ ma_map_2018_count <- ma_count_map_all_data %>%
     ) +
   ggtitle("Opioid overdose death counts per town per year\n2018")
 ma_map_2018_count 
-save_plot(
-  filename= "../../../figures/tidy_figures/ma_towns_map_and_deaths_2018.png",
-  ma_map_2018_count,
-  base_height = 5,
-  base_width = 10
-  )
+#save_plot(
+#  filename= "../../../figures/tidy_figures/ma_towns_map_and_deaths_2018.png",
+#  ma_map_2018_count,
+#  base_height = 5,
+#  base_width = 10
+#  )
 
 
 death_count_year_hist <- mod_df_count %>% 
