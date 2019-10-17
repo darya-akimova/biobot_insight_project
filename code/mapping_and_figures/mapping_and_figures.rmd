@@ -26,19 +26,18 @@ theme_set(theme_minimal())
 ## Data:
 
 ```{r data_import, comment=NA}
-death_and_acs_data <- read_csv("../../../data/tidy_data/death_count_norm_to_pop_and_acs_town_demographics_merge.csv")
-#ma_town_coord <- read_csv("../../../data/tidy_data/ma_town_crs4326_coords.csv")
-#ma_town_map <- st_read("../../../data/raw_data/townssurvey_shp/TOWNSSURVEY_POLYM.shp")
-#acs_medicare_opioid_merge <- read_csv("../../data/tidy_data/acs_medicare_opioid_stats_death_rate.csv")
-#death_acs_merge_full <- read_csv("../../data/tidy_data/death_count_norm_to_pop_and_acs_town_demographics_merge_all_cols.csv")
-#ma_total_deaths <- read_csv("../../data/tidy_data/ma_total_overdose_for_graph.csv")
-#mod_df_count <- read_csv("../../data/tidy_data/final_model_df_with_features_and_pred.csv")
+death_and_acs_data <- read_csv("../../data/tidy_data/death_count_norm_to_pop_and_acs_town_demographics_merge.csv")
+death_acs_merge_full <- read_csv("../../data/tidy_data/death_count_norm_to_pop_and_acs_town_demographics_merge_all_cols.csv")
+ma_total_deaths <- read_csv("../../data/tidy_data/ma_total_overdose_for_graph.csv")
+mod_df_count <- read_csv("../../data/tidy_data/final_model_df_with_features_and_pred.csv")
+ma_town_map <- st_read("../../data/raw_data/shapefiles_and_geography_related/townssurvey_shp/TOWNSSURVEY_POLYM.shp")
 ```
 
 
+# Plots
 
-```{r}
-
+```{r ma_total_deaths_plot}
+# for presentation
 ma_total_deaths %>% 
   ggplot(aes(year, overdose_deaths, fill = group)) +
   geom_bar(stat = "identity") +
@@ -53,6 +52,7 @@ ma_total_deaths %>%
     plot.title = element_text(size = 24)
     ) +
   scale_x_continuous(breaks=c(2000, 2014, 2018))
+# for blog
 ma_total_deaths_for_blog <- ma_total_deaths %>% 
   ggplot(aes(year, overdose_deaths, fill = group)) +
   geom_bar(stat = "identity") +
@@ -68,15 +68,23 @@ ma_total_deaths_for_blog <- ma_total_deaths %>%
   ggtitle("Total opioid overdose death per year\nMassachusetts") +
   scale_x_continuous(breaks=c(2002, 2006,2010, 2014, 2018))
 ma_total_deaths_for_blog
-#save_plot("./ma_deaths_for_blog.png", ma_total_deaths_for_blog, base_width = 8, base_height=4)
+#save_plot("../../figures/tidy_figures/ma_deaths_for_blog.png", ma_total_deaths_for_blog, base_width = 8, base_height=4)
 ```
 
 
-```{r}
+
+
+```{r opioid_overdose_death_rate_maps}
 ma_town_map_w_data <- ma_town_map %>% 
   st_transform(crs = "+init=epsg:4326") %>% 
   mutate(TOWN = str_to_lower(TOWN)) %>% 
   left_join(death_and_acs_data, by = c("TOWN" = "city_death"))
+ma_town_map_w_data %>%
+  ggplot() +
+  geom_sf(aes(fill = death_rate_18), color = "black") +
+  scale_fill_viridis_c(option = "D", name = "Rate") +
+  theme(axis.text.x = element_blank(), axis.text.y = element_blank()) +
+  ggtitle("Opioid overdose death rate per 10k town residents\n2018")
 ma_town_map_w_data$death_rate_18_cut <- as.character(cut(ma_town_map_w_data$death_rate_18, breaks = seq(0, 15, 5), include.lowest = TRUE))
 ma_town_map_w_data %>%
   ggplot() +
@@ -84,40 +92,11 @@ ma_town_map_w_data %>%
   scale_fill_viridis_d(option = "D", name = "Rate") +
   theme(axis.text.x = element_blank(), axis.text.y = element_blank()) +
   ggtitle("Opioid overdose death rate per 10k residents\n2018")
-ma_town_map_w_data %>%
-  ggplot() +
-  geom_sf(aes(fill = death_rate_17), color = "black") +
-  scale_fill_viridis_c(option = "D", name = "Rate") +
-  theme(axis.text.x = element_blank(), axis.text.y = element_blank()) +
-  ggtitle("Opioid overdose death rate per 10k town residents\n2017")
-ma_town_map_w_data %>%
-  ggplot() +
-  geom_sf(aes(fill = death_rate_16), color = "black") +
-  scale_fill_viridis_c(option = "D", name = "Rate") +
-  theme(axis.text.x = element_blank(), axis.text.y = element_blank()) +
-  ggtitle("Opioid overdose death rate per 10k town residents\n2016")
-ma_town_map_w_data %>%
-  ggplot() +
-  geom_sf(aes(fill = death_rate_15), color = "black") +
-  scale_fill_viridis_c(option = "D", name = "Rate") +
-  theme(axis.text.x = element_blank(), axis.text.y = element_blank()) +
-  ggtitle("Opioid overdose death rate per 10k town residents\n2015")
-ma_town_map_w_data %>%
-  ggplot() +
-  geom_sf(aes(fill = death_rate_14), color = "black") +
-  scale_fill_viridis_c(option = "D", name = "Rate") +
-  theme(axis.text.x = element_blank(), axis.text.y = element_blank()) +
-  ggtitle("Opioid overdose death rate per 10k town residents\n2014")
-ma_town_map_w_data %>%
-  ggplot() +
-  geom_sf(aes(fill = death_rate_13), color = "black") +
-  scale_fill_viridis_c(option = "D", name = "Rate") +
-  theme(axis.text.x = element_blank(), axis.text.y = element_blank()) +
-  ggtitle("Opioid overdose death rate per 10k town residents\n2013")
 ```
 
 
-```{r}
+
+```{r some_feature_maps}
 ma_town_map_w_data %>% 
   mutate(
     town_status = replace_na(town_status, "unsure"),
@@ -146,13 +125,11 @@ ma_town_map_w_data %>%
     ) +
   scale_fill_viridis_c(option="D", name = NULL) +
   ggtitle("2017 Town Population\nlog scale")
-  #scale_fill_manual(values= c("#f1a340", "#998ec3", "#f7f7f7"), name  = NULL)
 ```
 
 
-```{r}
-mod_df_count
 
+```{r}
 mod_df_count %>% 
   mutate(year = as_factor(year+1)) %>% 
   ggplot(aes(death_count_next_year, fill = year)) +
@@ -201,16 +178,6 @@ mod_df_count %>%
 
 
 ma_town_centroids <- st_centroid(ma_town_map_w_data)
-ma_town_map_w_data %>% 
-  ggplot() +
-  geom_sf(color = "grey20") +
-  geom_sf(data = ma_town_centroids, size = 2, color = "#d95f02") +
-  theme(
-    axis.text.x = element_blank(),
-    axis.text.y = element_blank(),
-    panel.grid.major = element_line(colour = 'transparent')
-    )
-
 ma_map_with_towns_and_centroids <- ma_town_map_w_data %>% 
   ggplot() +
   geom_sf(color = "grey20") +
@@ -220,10 +187,8 @@ ma_map_with_towns_and_centroids <- ma_town_map_w_data %>%
     axis.text.y = element_blank(),
     panel.grid.major = element_line(colour = 'transparent')
     ) +
-  ggtitle("Massachusetts municipal (city and town) boundaries\nCentroids overlaid") #+ 
-#  theme(
-#    plot.title = element_text(size = 16)
-#    )
+  ggtitle("Massachusetts municipal (city and town) boundaries\nCentroids overlaid")
+ma_map_with_towns_and_centroids
 
 ma_count_map_all_data <- ma_town_map %>% 
   st_transform(crs = "+init=epsg:4326") %>% 
@@ -255,7 +220,7 @@ ma_map_2018_count <- ma_count_map_all_data %>%
   ggtitle("Opioid overdose death counts per town per year\n2018")
 ma_map_2018_count 
 #save_plot(
-#  filename= "../../../figures/tidy_figures/ma_towns_map_and_deaths_2018.png",
+#  filename= "../../figures/tidy_figures/ma_towns_map_and_deaths_2018.png",
 #  ma_map_2018_count,
 #  base_height = 5,
 #  base_width = 10
@@ -273,13 +238,7 @@ death_count_year_hist <- mod_df_count %>%
   xlab("Number of opioid overdose deaths per town") +
   ylab("Year") +
   ggtitle("Opioid overdose death counts distributions")
-
-#save_plot(
-#  filename= "./ma_towns_map_and_deaths_for_blog.png",
-#  plot_grid(ma_map_with_towns_and_centroids, death_count_year_hist, ncol = 1),
-#  base_height = 10,
-#  base_width = 8
-#  )
+death_count_year_hist
 
 
 mod_df_count %>% 
@@ -313,6 +272,10 @@ mod_df_count %>%
     axis.title = element_text(size = 16),
     strip.text.x = element_text(size=16) 
     )
+```
+
+
+```{r death_rate_comparison_fig}
 mod_df_death_rate <- mod_df_count %>% 
   mutate(year=year+1) %>% 
   select(city_death:death_count_next_year, fin_pred, tot_pop) %>% 
@@ -328,12 +291,8 @@ mod_df_death_rate <- mod_df_count %>%
     ),
     town_shape = ifelse(city_death %in% c("ayer", "gardner", "salem", "fall river"), 1.5, 0.5)
   )
-mod_df_death_rate %>% 
-  ggplot(aes(year, pred_death_rate, group = city_death, color = town_col, size = town_shape)) +
-  geom_line(alpha = 1)
-mod_df_death_rate %>% 
-  ggplot(aes(year, actual_death_rate, group = city_death, color = town_col)) +
-  geom_line(alpha = 0.5)
+
+
 mod_df_death_rate %>% 
   arrange(desc(actual_death_rate))
 mod_df_death_rate %>% 
@@ -343,9 +302,7 @@ mod_df_death_rate_gath <- mod_df_death_rate %>%
   select(city_death:year, actual_death_rate:pred_death_rate, town_col) %>% 
   gather(key="measure", value="value", actual_death_rate:pred_death_rate) %>% 
   mutate(measure = ifelse(measure=="actual_death_rate", "Actual", "Predicted")) 
-
-
-mod_df_death_rate_gath %>% 
+death_rate_comp_plot <- mod_df_death_rate_gath %>% 
   filter(town_col == "Other") %>% 
   ggplot(aes(year, value, group = city_death, color = town_col)) +
   geom_line(alpha = 0.5) +
@@ -368,11 +325,11 @@ mod_df_death_rate_gath %>%
     ) +
   ggtitle("Actual v Predicted opioid overdose death rate per town\nRate per 10k town residents") +
   scale_color_manual(values = c("#1b9e77", "#d95f02",  "#7570b3", "grey50","#e7298a"), name = "Towns")
-
-mod_df_death_rate %>% 
-  filter(year == 2016) %>% 
-  arrange(desc(pred_death_rate))
-mod_df_death_rate %>% 
-  filter(year == 2018) %>% 
-  arrange(desc(pred_death_rate))
+death_rate_comp_plot
+#save_plot(
+#  filename= "../../figures/tidy_figures/actual_and_pred_deathrate_comp.png",
+#  death_rate_comp_plot,
+#  base_height = 8,
+#  base_width = 16
+#  )
 ```

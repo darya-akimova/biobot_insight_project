@@ -1,7 +1,7 @@
 # Predicting and contextualizing city-level opioid overdose deaths across Massachusetts
 #### An Insight Boston Fall 2019 consultation project with [Biobot Analytics](https://www.biobot.io/)
 
-### Goals
+## Goals
 
 I am an [Insight Health Data Science](https://www.insighthealthdata.com/) Fellow from the Boston, MA Fall 2019 and this was my project.
 
@@ -11,7 +11,7 @@ The project was proposed to Insight by Biobot Analytics with the goal of:
 * Exploring publicly available opioid and non-opioid related datasets and their usefulness in understanding the opioid crisis
 
 
-### Dependencies
+## Dependencies
 
 #### Python 
 
@@ -34,7 +34,7 @@ The project was proposed to Insight by Biobot Analytics with the goal of:
 * sf
 
 
-### Data
+## Data
 
 #### Raw Data:
 
@@ -63,9 +63,12 @@ est         | Estimate (-999 = not applicable, blank = censored or unavailable)
 
 **Use:** 
 
+
+## Notebooks
+
 ### Data cleaning and feature engineering
 
-##### Notebook 1: city_health_dash_500_cities_opioid_corr
+#### Notebook 1: city_health_dash_500_cities_opioid_corr
 
 **Filename:**
 
@@ -90,7 +93,7 @@ City Health dashboard data at city-level:
 * products/notebook_1_city_health_dash_500_cities_opioid_corr.pdf - pdf download of notebook
 
 
-##### Notebook 2: ma_overdose_deaths_by_town_cleanup_and_explore
+#### Notebook 2: ma_overdose_deaths_by_town_cleanup_and_explore
 
 **Filename:**
 
@@ -124,7 +127,7 @@ Table 2 (deaths binned by location of death occurence)
 
 ### Modeling
 
-##### gam_modeling
+#### gam_modeling
 
 **Filename:**
 
@@ -142,7 +145,7 @@ Table 2 (deaths binned by location of death occurence)
 
 
 
-### Results
+## Results
 
 * [Blog post](https://medium.com/@dvakimova/predicting-and-contextualizing-opioid-overdose-deaths-across-massachusetts-b1bc59e43db8) discussing this work
-* [Demo Slides](https://www.slideshare.net/DaryaAkimova/insight-week-4-demo-179121957) used to present this project
+* [Demo Slides](https://www.slideshare.net/DaryaAkimova/insight-week-4-demo-179338716) used to present this project
