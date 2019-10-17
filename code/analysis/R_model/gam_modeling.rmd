@@ -1,6 +1,6 @@
 ---
-title: "gam_modeling"
-author: "darya akimova"
+title: "GAM model building"
+author: "Darya Akimova"
 date: "9/23/2019"
 output: html_document
 ---
@@ -146,6 +146,8 @@ Note: Variance =/= Mean - data is overdispersed and a poisson is not appropriate
 
 ## Functions
 
+Note: Concurvity is a metric provided by mgcv to evaluate the relationship between features (generalization of linearity) - ranges from 0 (good) to 1 (bad - strong relationship with other features). Concurvity can be evaluated for a feature in relation to all others (this is provided by the call `concurvity(model, full = TRUE)`), and I will focus on the "worst-case" concurvity metric. According to the Noam Ross course on GAMs (datacamp), 0.84 is a good rule of thumb for worst-case concurvity tolerance. Concurvity can also be evaluated between individual pairs of features (with the call `concurvity(model, full = FALSE)`) - again will focus on worst-case concurvity estimate.
+
 Simple functions to calculate RMSE error to evaluate the model performace and a function to tidy up the concurvity dataframe output by mgcv (converts to a dataframe and select out the "worst" case concurvity):
 
 ```{r functions}
@@ -175,6 +177,8 @@ Base model - only the required variables of:
 * geospatial coordinates, incorporated as an interaction term s(x, y) - centroids of the municipalities left in the dataset
 * population to normalize opioid overdose death counts
 * year
+
+Note: `method="REML"` is a method to select the optimal smoothing parameter (to prevent overfitting and underfitting) - controls how close to the data points each individual smooth will get.
 
 ```{r base_model}
 base_model <- gam(
@@ -521,7 +525,7 @@ Notes:
 Back pedal - take that out and go back to sub 4 - look at interaction between terms mean_house_inc, pop_struggling_prop, and less_than_hs_ed 
 
 
-```{r full_sub4_concurvity}
+```{r full_sub4_concurvity_followup}
 # mean income concurvity
 full_model_sub4_conc %>% 
   select(feature, contains("mean")) %>% 
@@ -879,10 +883,10 @@ mod_df_count$fin_pred <- predict(final_model, mod_df_count, type = "response")
 ## Model visualizations
 
 
-```{r model_viz}
+```{r model_viz_qqplot_all_smooths}
 library(mgcViz)
-test <- getViz(final_model)
-qq(test, rep = 10, method = "simul1", CI = "normal", showReps = TRUE,
+final_model_convert <- getViz(final_model)
+qq(final_model_convert, rep = 10, method = "simul1", CI = "normal", showReps = TRUE,
         ngr = 1e2, a.replin = list(alpha = 0.1), a.qqpoi = list(shape = 19)) +
   ggtitle("QQ Plot\nNegative binomial GAM") +
   xlab("Theoretical Quantiles") +
@@ -893,287 +897,56 @@ qq(test, rep = 10, method = "simul1", CI = "normal", showReps = TRUE,
     axis.title = element_text(size = 20),
     plot.title = element_text(size = 20)
     )
-library(broom)
-tidy(final_model)
-tidy(final_model, parametric=TRUE)
-coef(final_model)
-print(plot(test, allTerms = T), pages = 1)
-plot(test, allTerms = T, select =7)
-plot(final_model)
-print(plot(test, allTerms = T, residuals = TRUE), pages = 1)
-print(plot(test, allTerms = T, rug = TRUE), pages = 1)
-plot(test, allTerms = T, select = 3, rug=T)
-print(plot(test, allTerms = T), pages = 1)
-
-plot(final_model, seWithMean = TRUE, rug = TRUE, shift = coef(final_model)[1], select=2)
-plot(final_model, select=7, rug=TRUE)
+# different variations on result plots
+print(plot(final_model_convert, allTerms = T), pages = 1)
+# directly save this from R plot interface to figures/tidy_figures/full_model_gam_plot.png
+```
 
 
-o <- plot( sm(test, 7) )
-o + 
+Final model QQ plot shows that most of the variation not captures by the model is at the extremes.
+
+The second plot is a plot of all the feature smooths and their relationship with the smooth. With a GAM, coefficients are not directly interpretable (I think because they need to go through the link function to be converted to the expected outcome, and each feature will have different coefficients through the range of the value for each basis function). But the plot above can help explain the relationship of each individual feature with the target variable.
+
+
+Testing other model plots, not too useful:
+
+```{r model_viz_expreimentation}
+# pick out individual term
+plot(final_model_convert, allTerms = T, select = 7)
+# does changing the residuals setting change anything?
+print(plot(final_model_convert, allTerms = T, residuals = TRUE), pages = 1)
+# no
+# try with rug (represenin)
+plot(final_model, select = 7, rug = TRUE)
+
+# cleaned up version of one of the individual plots?
+var_7 <- plot(sm(final_model_convert, 7))
+var_7 + 
  # l_rug(mapping = aes(x=x, y=y), alpha = 0.8) +
   l_ciPoly() +
   l_fitLine(colour = "red") +
   #l_ciLine(mul = 5, colour = "blue", linetype = 2) + 
   l_points(shape = 19, size = 1, alpha = 0.1)
+```
 
+Can see some of the noisiness - need to be wary of interpreting result.
 
-ma_town_map_w_data %>% 
-  mutate(
-    town_status = replace_na(town_status, "unsure"),
-    town_status = as_factor(town_status)
-  ) %>% 
-  ggplot() +
-  geom_sf(aes(fill = town_status)) +
-  theme(
-    axis.text.x = element_blank(),
-    axis.text.y = element_blank(),
-    panel.grid.major = element_line(colour = 'transparent'),
-    legend.text = element_text(size = 20),
-    plot.title = element_text(size = 24)
-    ) +
-  scale_fill_manual(values= c("#f1a340", "#998ec3", "#f7f7f7"), name  = NULL) +
-  ggtitle("Town Pop Grown/Shrunk (2010 - 2017)")
-ma_town_map_w_data %>% 
-  ggplot() +
-  geom_sf(aes(fill = log(tot_pop_17 + 1))) +
-  theme(
-    axis.text.x = element_blank(),
-    axis.text.y = element_blank(),
-    panel.grid.major = element_line(colour = 'transparent'),
-    legend.text = element_text(size = 20),
-    plot.title = element_text(size = 24)
-    ) +
-  scale_fill_viridis_c(option="D", name = NULL) +
-  ggtitle("2017 Town Population\nlog scale")
-  #scale_fill_manual(values= c("#f1a340", "#998ec3", "#f7f7f7"), name  = NULL)
+Would tidying up the odel to pull out coefficients be useful?
+
+```{r model_tidy}
+library(broom)
+tidy(final_model)
+tidy(final_model, parametric=TRUE)
+coef(final_model)
+```
+
+Not sure what to do with it.
+
+Save the final model df for easier plotting/mapping:
+
+```{r mod_df_write}
+#write_csv(mod_df_count, "../../../data/tidy_data/final_model_df_with_features_and_pred.csv")
 ```
 
 
-```{r}
-mod_df_count
-
-mod_df_count %>% 
-  mutate(year = as_factor(year+1)) %>% 
-  ggplot(aes(death_count_next_year, fill = year)) +
-  geom_histogram(position="dodge", bins=10) +
-  scale_fill_brewer(type = "seq", name = "Year", direction = -1) + 
-  theme_dark() +
-  xlab("Number of Overdose Deaths per Town") +
-  ylab("Count") +
-  theme(
-    axis.text.x = element_text(size = 12),
-    axis.text.y = element_text(size = 12),
-    axis.title = element_text(size = 14)
-    )
-library(ggridges)
-mod_df_count %>% 
-  mutate(year = fct_rev(as_factor(year+1))) %>% 
-  ggplot(aes(death_count_next_year, y = year, fill = year)) +
-  geom_density_ridges(stat = "binline", binwidth=5,draw_baseline = F) +
-  theme_ridges() +
-  scale_y_discrete(expand = c(0.01, 0)) +
-  scale_x_continuous(expand = c(0, 0)) +
-  scale_fill_brewer(type = "seq", name = "Year") +
-  xlab("Number of opioid overdose deaths per town") +
-  ylab("") +
-  theme(
-    axis.text.x = element_text(size = 24),
-    axis.text.y = element_text(size = 24),
-    axis.title = element_text(size = 24),
-    legend.text = element_text(size = 24),
-    legend.title = element_text(size = 24)
-    )
-
-mod_df_count %>% 
-  filter(year == 2017) %>% 
-  mutate(year = fct_rev(as_factor(year+1))) %>% 
-  ggplot(aes(death_count_next_year)) +
-  geom_histogram(binwidth = 5) +
-  xlab("") +
-  ylab("") +
-  theme(
-    axis.text.x = element_text(size = 12),
-    axis.text.y = element_text(size = 12),
-    axis.title = element_text(size = 14)
-    )
-
-
-
-ma_town_centroids <- st_centroid(ma_town_map_w_data)
-ma_town_map_w_data %>% 
-  ggplot() +
-  geom_sf(color = "grey20") +
-  geom_sf(data = ma_town_centroids, size = 2, color = "#d95f02") +
-  theme(
-    axis.text.x = element_blank(),
-    axis.text.y = element_blank(),
-    panel.grid.major = element_line(colour = 'transparent')
-    )
-
-ma_map_with_towns_and_centroids <- ma_town_map_w_data %>% 
-  ggplot() +
-  geom_sf(color = "grey20") +
-  geom_sf(data = ma_town_centroids, size = 1.5, color = "#d95f02") +
-  theme(
-    axis.text.x = element_blank(),
-    axis.text.y = element_blank(),
-    panel.grid.major = element_line(colour = 'transparent')
-    ) +
-  ggtitle("Massachusetts municipal (city and town) boundaries\nCentroids overlaid") #+ 
-#  theme(
-#    plot.title = element_text(size = 16)
-#    )
-
-ma_count_map_all_data <- ma_town_map %>% 
-  st_transform(crs = "+init=epsg:4326") %>% 
-  mutate(TOWN = str_to_lower(TOWN)) %>% 
-  left_join(death_acs_merge_full, by = c("TOWN" = "city_death"))
-
-
-ma_count_map_all_data %>%
-  ggplot() +
-  geom_sf(aes(fill = `2018`), color = "black") +
-  scale_fill_viridis_c(option = "D", name = "Count") +
-  theme(axis.text.x = element_blank(), axis.text.y = element_blank()) +
-  ggtitle("Opioid overdose death counts per town\n2018")
-
-ma_count_map_all_data$death_18_cut <- cut(ma_count_map_all_data$`2018`, breaks = c(0, 1, 5, 10, 50, 250), include.lowest = TRUE)
-table(ma_count_map_all_data$death_18_cut)
-ma_map_2018_count <- ma_count_map_all_data %>%
-  ggplot() +
-  geom_sf(aes(fill = death_18_cut), color = "gray50") +
-  scale_fill_viridis_d(option = "D", name = "Count\nInterval") +
-  theme(
-    axis.text.x = element_blank(),
-    axis.text.y = element_blank(),
-    panel.grid.major = element_line(colour = 'transparent'),
-    plot.title = element_text(size = 22),
-    legend.text = element_text(size = 16),
-    legend.title = element_text(size = 18)
-    ) +
-  ggtitle("Opioid overdose death counts per town per year\n2018")
-ma_map_2018_count 
-#save_plot(
-#  filename= "../../../figures/tidy_figures/ma_towns_map_and_deaths_2018.png",
-#  ma_map_2018_count,
-#  base_height = 5,
-#  base_width = 10
-#  )
-
-
-death_count_year_hist <- mod_df_count %>% 
-  mutate(year = fct_rev(as_factor(year+1))) %>% 
-  ggplot(aes(death_count_next_year, y = year, fill = year)) +
-  geom_density_ridges(stat = "binline", binwidth=5,draw_baseline = F) +
-  theme_ridges() +
-  scale_y_discrete(expand = c(0.01, 0)) +
-  scale_x_continuous(expand = c(0, 0)) +
-  scale_fill_brewer(type = "seq", name = "Year") +
-  xlab("Number of opioid overdose deaths per town") +
-  ylab("Year") +
-  ggtitle("Opioid overdose death counts distributions")
-
-#save_plot(
-#  filename= "./ma_towns_map_and_deaths_for_blog.png",
-#  plot_grid(ma_map_with_towns_and_centroids, death_count_year_hist, ncol = 1),
-#  base_height = 10,
-#  base_width = 8
-#  )
-
-
-mod_df_count %>% 
-  mutate(year = year+1) %>% 
-  ggplot(aes(death_count_next_year, fin_pred)) +
-  geom_point(size=2, alpha=0.5) +
-  geom_smooth(method="lm", se=FALSE, size = 1.5) +
-  scale_y_sqrt(limits=c(0,300)) +
-  scale_x_sqrt(limits=c(0,300)) +
-  ylab("Predicted")+
-  xlab("Actual") +
-  ggtitle("Predicted vs Actual Opioid Overdose Death Counts\nsquare root scale") +
-  theme(
-    axis.text.x = element_text(size = 20),
-    axis.text.y = element_text(size = 20),
-    axis.title = element_text(size = 20),
-    plot.title = element_text(size = 24)
-    )
-mod_df_count$resid <- mod_df_count$death_count_next_year - mod_df_count$fin_pred
-mod_df_count %>% 
-  ggplot(aes(death_count_next_year, resid)) +
-  geom_point(alpha = 0.5) +
-  facet_wrap(~year) +
-  geom_hline(yintercept = 0) +
-  scale_x_sqrt() +
-  xlab("Overdose death count") +
-  ylab("Residual") +
-  theme(
-    axis.text.x = element_text(size = 16),
-    axis.text.y = element_text(size = 16),
-    axis.title = element_text(size = 16),
-    strip.text.x = element_text(size=16) 
-    )
-mod_df_death_rate <- mod_df_count %>% 
-  mutate(year=year+1) %>% 
-  select(city_death:death_count_next_year, fin_pred, tot_pop) %>% 
-  mutate(
-    actual_death_rate = death_count_next_year * 10000/ tot_pop,
-    pred_death_rate = fin_pred * 10000/ tot_pop,
-    town_col = case_when(
-      city_death == "ayer" ~ "Ayer",
-      city_death == "gardner" ~ "Gardner",
-      city_death == "salem" ~ "Salem",
-      city_death == "fall river" ~ "Fall River",
-      TRUE ~ "Other"
-    ),
-    town_shape = ifelse(city_death %in% c("ayer", "gardner", "salem", "fall river"), 1.5, 0.5)
-  )
-mod_df_death_rate %>% 
-  ggplot(aes(year, pred_death_rate, group = city_death, color = town_col, size = town_shape)) +
-  geom_line(alpha = 1)
-mod_df_death_rate %>% 
-  ggplot(aes(year, actual_death_rate, group = city_death, color = town_col)) +
-  geom_line(alpha = 0.5)
-mod_df_death_rate %>% 
-  arrange(desc(actual_death_rate))
-mod_df_death_rate %>% 
-  filter(year == 2018) %>% 
-  arrange(desc(pred_death_rate))
-mod_df_death_rate_gath <- mod_df_death_rate %>% 
-  select(city_death:year, actual_death_rate:pred_death_rate, town_col) %>% 
-  gather(key="measure", value="value", actual_death_rate:pred_death_rate) %>% 
-  mutate(measure = ifelse(measure=="actual_death_rate", "Actual", "Predicted")) 
-
-
-mod_df_death_rate_gath %>% 
-  filter(town_col == "Other") %>% 
-  ggplot(aes(year, value, group = city_death, color = town_col)) +
-  geom_line(alpha = 0.5) +
-  geom_line(
-    data = mod_df_death_rate_gath %>% filter(town_col != "Other"),
-    aes(year, value, group = city_death, color = town_col),
-    size = 2
-    ) +
-  facet_wrap(~measure) +
-  xlab("Year") +
-  ylab("") +
-  theme(
-    axis.text.x = element_text(size = 20),
-    axis.text.y = element_text(size = 20),
-    axis.title = element_text(size = 20),
-    plot.title = element_text(size = 22),
-    strip.text.x = element_text(size = 20),
-    legend.text = element_text(size = 20),
-    legend.title = element_text(size = 20)
-    ) +
-  ggtitle("Actual v Predicted opioid overdose death rate per town\nRate per 10k town residents") +
-  scale_color_manual(values = c("#1b9e77", "#d95f02",  "#7570b3", "grey50","#e7298a"), name = "Towns")
-
-mod_df_death_rate %>% 
-  filter(year == 2016) %>% 
-  arrange(desc(pred_death_rate))
-mod_df_death_rate %>% 
-  filter(year == 2018) %>% 
-  arrange(desc(pred_death_rate))
-```
 
