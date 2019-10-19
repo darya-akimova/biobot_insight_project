@@ -192,6 +192,7 @@ pdf notebook report (in case notebook won't run)
 
 
 **Inputs:**
+
 Opioid overdose deaths per MA town/city, grouped by place of death occurence - used to compare to MA town survey shapefile to determine if towns match up.
 
 * Local path: `data/tidy_data/ma_town_opioid_overdose_death_by_place_of_death_2014_to_2018.csv`
@@ -227,11 +228,34 @@ pdf output in case notebook doesn't run:
 
 <br>
 
-### Notebook 5: 
+### Notebook 5: Medicare opioid and non-opioid prescriber datasets cleanup and town join
 
 **Filename:**
 
-`code/cleaning_and_eda/notebook_4_overdose_death_and_acs_by_census_block_merge_and_eda.ipynb`
+`code/cleaning_and_eda/notebook_5_medicare_opioid_and_nonopioid_prescriber_cleanup_and_town_join.ipynb`
+
+**Goals/Accomplishments:**
+
+* Clean up 
+
+
+**Inputs:**
+
+* 
+
+
+**Outputs:**
+
+
+
+
+<br>
+
+### Notebook 6: 
+
+**Filename:**
+
+`code/cleaning_and_eda/.ipynb`
 
 **Goals/Accomplishments:**
 
@@ -241,8 +265,6 @@ pdf output in case notebook doesn't run:
 
 
 **Outputs:**
-
-
 
 
 <br>
