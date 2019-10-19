@@ -190,10 +190,63 @@ Association of MA towns with 2010 census blocks (for ACS data merge)
 
 * Local path: `data/tidy_data/census_block_town_match.csv` 
 * Not perfect, some errors (see notebook for analysis), but will go with this because a perfect match may take too much time
+* Used in: `code/cleaning_and_eda/notebook_4_overdose_death_and_acs_by_census_block_merge_and_eda.ipynb`
+
+Error on actual vs. estimated 2010 population counts after census block - town merge
+
+* Local path: `data/tidy_data/census_block_town_match_2010pop_error.csv`
+* In case need to refer to population estimate errors again
+* Used in: `code/cleaning_and_eda/notebook_4_overdose_death_and_acs_by_census_block_merge_and_eda.ipynb`
 
 pdf notebook report (in case notebook won't run)
 
 * Local path: `products/notebook_3_ma_census_block_and_town_match.pdf`
+
+
+
+#### Notebook 4: Opioid overdose deaths and ACS dataset merge and EDA
+
+**Filename:**
+
+`code/cleaning_and_eda/notebook_4_overdose_death_and_acs_by_census_block_merge_and_eda.ipynb`
+
+**Goals/Accomplishments:**
+* Tried normalizing death count data to town population (turn raw counts into deaths per 10k residents values) - decided not to model the data this way - instead model the raw counts (can use the distributions meant for count data that can be very skewed)
+* Pulled out some ACS demographics data and performed some EDA, feature engineering
+
+
+**Inputs:**
+Opioid overdose deaths per MA town/city, grouped by place of death occurence - used to compare to MA town survey shapefile to determine if towns match up.
+
+* Local path: `data/tidy_data/ma_town_opioid_overdose_death_by_place_of_death_2014_to_2018.csv`
+* created in notebook #2
+
+Association of MA towns with 2010 census blocks (for ACS data merge) 
+
+* Local path: `data/tidy_data/census_block_town_match.csv` 
+* created in notebook #3
+
+Error on actual vs. estimated 2010 population counts after census block - town merge
+
+* Local path: `data/tidy_data/census_block_town_match_2010pop_error.csv`
+* In case need to refer to population estimate errors again
+* created in notebook #3
+
+Census block-level 2017 American Community Survey data
+
+* Local path: `data/raw_data/american_community_survey/R12288202_SL150.csv`
+* Source: Biobot
+
+
+**Outputs:**
+
+Opioid overdose death count (by town for years 2014-2018) merged with ACS demogrpahics data
+
+* Local path: `data/tidy_data/overdose_death_count_acs_merge.csv`
+
+pdf output in case notebook doesn't run:
+
+* Local path: `products/notebook_4_overdose_death_and_acs_by_census_block_merge_and_eda.pdf`
 
 
 ### Modeling
