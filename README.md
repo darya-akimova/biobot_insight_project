@@ -3,7 +3,7 @@
 
 ## Goals
 
-I am an [Insight Health Data Science](https://www.insighthealthdata.com/) Fellow from the Boston, MA Fall 2019 and this was my project.
+I am an [Insight Health Data Science](https://www.insighthealthdata.com/) Fellow in the Boston, MA Fall 2019 cohort and this was my project.
 
 The project was proposed to Insight by Biobot Analytics with the goal of:
 
@@ -88,9 +88,19 @@ City Health dashboard data at city-level:
 
 **Outputs:**
 
-* data/tidy_data/500_cities_totpop_metric_pivot_table.csv
-* figures/tidy_figures/500_cities_opioid_corr.png
-* products/notebook_1_city_health_dash_500_cities_opioid_corr.pdf - pdf download of notebook
+Subsett of the city  health dashboard dataset: city-level, general population only:
+
+* Local path: data/tidy_data/500_cities_totpop_metric_pivot_table.csv
+* Used to create plot below
+
+Plot of spearman correlation coefficients between city-level opioid overdose deaths and all other metrics (500 cities, app. 1 year worth of data)
+
+* Local path: `figures/tidy_figures/500_cities_opioid_corr.png`
+
+pdf download of notebook (in case notebook won't run)
+
+* Local path: `products/notebook_1_city_health_dash_500_cities_opioid_corr.pdf`
+
 
 
 #### Notebook 2: ma_overdose_deaths_by_town_cleanup_and_explore
@@ -113,36 +123,77 @@ MA opioid overdose death counts by town/city derived from Mass.gov statistics, a
 Original source: https://www.mass.gov/lists/current-opioid-statistics
 
 Table 1 (deaths binned by location of residence of decedent, MA residents only)
-* Local Path: `data/raw_data/raw_data/ma_opioid_overdose_death_counts/ma_overdose_death_by_town_2014_2018_table1.csv`
+
+* Local Path: `data/raw_data/ma_opioid_overdose_death_counts/ma_overdose_death_by_town_2014_2018_table1.csv`
 
 Table 2 (deaths binned by location of death occurence)
-* Local Path: `data/raw_data/raw_data/ma_opioid_overdose_death_counts/ma_overdose_death_by_town_2014_2018_table2.csv`
+
+* Local Path: `data/raw_data/ma_opioid_overdose_death_counts/ma_overdose_death_by_town_2014_2018_table2.csv`
+
 
 **Outputs:**
 
-* Opioid overdose deaths by MA town/city Table 1: /data/tidy_data/ma_town_opioid_overdose_death_by_place_of_resid_2014_to_2018.csv
-* Opioid overdose deaths by MA town/city Table 2: /data/tidy_data/ma_town_opioid_overdose_death_by_place_of_death_2014_to_2018.csv
-* pdf notebook report: products/notebook_2_ma_overdose_deaths_by_town_cleanup_and_explore.pdf
+Opioid overdose deaths by MA town/city Table 1
+
+* Local path: `data/tidy_data/ma_town_opioid_overdose_death_by_place_of_resid_2014_to_2018.csv`
+
+Opioid overdose deaths by MA town/city Table 2
+
+* Local path: `data/tidy_data/ma_town_opioid_overdose_death_by_place_of_death_2014_to_2018.csv`
+* Used in: `code/cleaning_and_eda/notebook_3_ma_census_block_and_town_match.ipynb`
+
+pdf notebook report (in case notebook won't run)
+
+* Local path: `products/notebook_2_ma_overdose_deaths_by_town_cleanup_and_explore.pdf`
+
 
 
 #### Notebook 3: ma_overdose_deaths_by_town_cleanup_and_explore
 
 **Filename:**
 
-`code/cleaning_and_eda/.ipynb`
+`code/cleaning_and_eda/notebook_3_ma_census_block_and_town_match.ipynb`
 
 **Goals/Accomplishments:**
 
-
+* Derived latitude and longitude of the centroid of each of the 351 towns/municipalities in the MA opioid overdose dataset to use as the geospatial component when building a model.
+* Joined towns (351 towns/cities in the MA opioid overdose dataset) and 2010 census blocks to pull in the American Community Survey demographics data and use it as predictors of opioid overdose deaths per year per town.
+* Explored the merge error by comparing the 2010 population counts from the town survey shapefile and the sum after merge of the 2010 population counts from the census block shapefile 
 
 
 **Inputs:**
 
+Opioid overdose deaths per MA town/city, grouped by place of death occurence - used to compare to MA town survey shapefile to determine if towns match up.
+
+* Local path: `data/tidy_data/ma_town_opioid_overdose_death_by_place_of_death_2014_to_2018.csv`
+* created in notebook #2
+
+MA town survey shapefile
+
+* Local path: `data/raw_data/shapefiles_and_geography_related/townssurvey_shp/TOWNSSURVEY_POLYM.shp`
+* Original source: https://docs.digital.mass.gov/dataset/massgis-data-community-boundaries-towns-survey-points
+
+2010 Census Block shapefile - used to merge towns/cities with the census blocks within them:
+
+* Local path: `data/raw_data/shapefiles_and_geography_related/CENSUS2010_BLK_BG_TRCT_SHP/CENSUS2010BLOCKGROUPS_POLY.shp`
+* Original source: https://docs.digital.mass.gov/dataset/massgis-data-datalayers-2010-us-census
 
 
 **Outputs:**
 
+MA tows with centroid x/y points for modeling
 
+* Local path: `data/tidy_data/ma_town_crs4326_coords.csv` 
+* Used in: `code/analysis/R_model/gam_modeling.rmd`
+
+Association of MA towns with 2010 census blocks (for ACS data merge) 
+
+* Local path: `data/tidy_data/census_block_town_match.csv` 
+* Not perfect, some errors (see notebook for analysis), but will go with this because a perfect match may take too much time
+
+pdf notebook report (in case notebook won't run)
+
+* Local path: `products/notebook_3_ma_census_block_and_town_match.pdf`
 
 
 ### Modeling
