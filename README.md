@@ -1,7 +1,9 @@
 # Predicting and contextualizing city-level opioid overdose deaths across Massachusetts
 #### An Insight Boston Fall 2019 consultation project with [Biobot Analytics](https://www.biobot.io/)
 
-## Goals
+<br>
+
+# Goals
 
 I am an [Insight Health Data Science](https://www.insighthealthdata.com/) Fellow in the Boston, MA Fall 2019 cohort and this was my project.
 
@@ -10,10 +12,11 @@ The project was proposed to Insight by Biobot Analytics with the goal of:
 * Developing a strategy for merging geospatial data at different resolutions
 * Exploring publicly available opioid and non-opioid related datasets and their usefulness in understanding the opioid crisis
 
+<br>
 
-## Dependencies
+# Dependencies
 
-#### Python 
+### Python 
 
 **Use:** Data preprocessing, EDA
 
@@ -22,10 +25,9 @@ The project was proposed to Insight by Biobot Analytics with the goal of:
 * matplotlib
 * seaborn
 * goepandas
-* folium (not crucial to main project)
 
 
-#### R 
+### R 
 
 **Use:** Modeling, Figure generation
 
@@ -33,42 +35,13 @@ The project was proposed to Insight by Biobot Analytics with the goal of:
 * mgcv
 * sf
 
+<br>
 
-## Data
+# Notebooks
 
-#### Raw Data:
+## Data cleaning and feature engineering
 
-##### **City Health dashboard data at city-level**
-
-**Source:** [City Health Dashboard](https://www.cityhealthdashboard.com/)
-
-https://www.cityhealthdashboard.com/data-access
-
-**Data Acquired:** 9/15/2019
-
-**Local Path:** `data/raw_data/500_cities_data/CHDB_data_city_all v7_0.csv`
-
-**Fields:**
-
-Full data codebook was included along with the datasets as part of the download, but particular fields utilized for this analysis were:
-
-
-Name        |  Content
-------------|----------
-state_abbr  | State abbreviation
-city_name   | City name
-metric_name | Metric name (text - specific socioeconomic or health metric)
-group_name  | Demographic group
-est         | Estimate (-999 = not applicable, blank = censored or unavailable)
-
-**Use:** 
-
-
-## Notebooks
-
-### Data cleaning and feature engineering
-
-#### Notebook 1: city_health_dash_500_cities_opioid_corr
+### Notebook 1: City health dashboard 500 cities opioid overdose deaths correlation EDA
 
 **Filename:**
 
@@ -102,8 +75,9 @@ pdf download of notebook (in case notebook won't run)
 * Local path: `products/notebook_1_city_health_dash_500_cities_opioid_corr.pdf`
 
 
+<br>
 
-#### Notebook 2: ma_overdose_deaths_by_town_cleanup_and_explore
+### Notebook 2: Notebook to prep and explore the target MA yearly opioid overdose deaths table data
 
 **Filename:**
 
@@ -147,8 +121,9 @@ pdf notebook report (in case notebook won't run)
 * Local path: `products/notebook_2_ma_overdose_deaths_by_town_cleanup_and_explore.pdf`
 
 
+<br>
 
-#### Notebook 3: ma_overdose_deaths_by_town_cleanup_and_explore
+### Notebook 3: MA cencus block and town join, basic geospatial EDA
 
 **Filename:**
 
@@ -203,8 +178,9 @@ pdf notebook report (in case notebook won't run)
 * Local path: `products/notebook_3_ma_census_block_and_town_match.pdf`
 
 
+<br>
 
-#### Notebook 4: Opioid overdose deaths and ACS dataset merge and EDA
+### Notebook 4: Opioid overdose deaths and ACS dataset merge and EDA
 
 **Filename:**
 
@@ -249,9 +225,31 @@ pdf output in case notebook doesn't run:
 * Local path: `products/notebook_4_overdose_death_and_acs_by_census_block_merge_and_eda.pdf`
 
 
-### Modeling
+<br>
 
-#### gam_modeling
+### Notebook 5: 
+
+**Filename:**
+
+`code/cleaning_and_eda/notebook_4_overdose_death_and_acs_by_census_block_merge_and_eda.ipynb`
+
+**Goals/Accomplishments:**
+
+
+**Inputs:**
+
+
+
+**Outputs:**
+
+
+
+
+<br>
+
+## Modeling
+
+### gam_modeling
 
 **Filename:**
 
@@ -268,8 +266,43 @@ pdf output in case notebook doesn't run:
 **Outputs:**
 
 
+<br>
 
-## Results
+
+# Data
+
+## Raw Data:
+
+#### City Health dashboard data at city-level
+
+**Source:** [City Health Dashboard](https://www.cityhealthdashboard.com/)
+
+https://www.cityhealthdashboard.com/data-access
+
+**Data Acquired:** 9/15/2019
+
+**Local Path:** `data/raw_data/500_cities_data/CHDB_data_city_all v7_0.csv`
+
+**Fields:**
+
+Full data codebook was included along with the datasets as part of the download, but particular fields utilized for this analysis were:
+
+
+Name        |  Content
+------------|----------
+state_abbr  | State abbreviation
+city_name   | City name
+metric_name | Metric name (text - specific socioeconomic or health metric)
+group_name  | Demographic group
+est         | Estimate (-999 = not applicable, blank = censored or unavailable)
+
+**Use:** 
+
+
+<br>
+
+
+# Results
 
 * [Blog post](https://medium.com/@dvakimova/predicting-and-contextualizing-opioid-overdose-deaths-across-massachusetts-b1bc59e43db8) discussing this work
 * [Demo Slides](https://www.slideshare.net/DaryaAkimova/insight-week-4-demo-179338716) used to present this project
