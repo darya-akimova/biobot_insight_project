@@ -34,6 +34,7 @@ The project was proposed to Insight by Biobot Analytics with the goal of:
 * tidyverse
 * mgcv
 * sf
+* mgcViz
 
 <br>
 
@@ -399,13 +400,34 @@ pdf output in case notebook doesn't run:
 
 **Goals/Accomplishments:**
 
+* Create GAM model that use created feature datasets (ACS, medicare prescription data)  to predict opioid overdose death counts per town per year
 
 
 **Inputs:**
 
+MA town centroid coordinates:
+
+* Local path: `data/tidy_data/ma_town_crs4326_coords.csv`
+* Created in notebook #3
+
+Summarized benzodiazepine prescription data years 2013-2017, grouped by town (from opioid overdose death dataset), year, and drug (out of the 3 benzo drugs in the dataset, by geneeric name)
+
+* Local path: `data/tidy_data/med_partD_benzo_sum_w_town_merge_13_to_17.csv`
+* Created in notebook #5
+
+
+Merged opioid overdose death count data, ACS, and Medicare opioid prescription rates (summarized):
+
+* Local path: `data/tidy_data/acs_medicare_opioid_stats_death_count_merge.csv`
+* Created in notebook #6
 
 
 **Outputs:**
+
+Concurvity figure (full model) for blog:
+
+* Local path: `figures/tidy_figures/full_model_concurvity.png`
+
 
 
 <br>
@@ -415,7 +437,7 @@ pdf output in case notebook doesn't run:
 
 **Filename:**
 
-`code/.rmd`
+`code/analysis/R_model/.rmd`
 
 **Goals/Accomplishments:**
 
@@ -466,4 +488,4 @@ est         | Estimate (-999 = not applicable, blank = censored or unavailable)
 # Results
 
 * [Blog post](https://medium.com/@dvakimova/predicting-and-contextualizing-opioid-overdose-deaths-across-massachusetts-b1bc59e43db8) discussing this work
-* [Demo Slides](https://www.slideshare.net/DaryaAkimova/insight-week-4-demo-179338716) used to present this project
+* [Demo Slides](https://www.slideshare.net/DaryaAkimova/insight-week-4-demo-with-model-update) used to present this project

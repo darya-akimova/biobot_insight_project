@@ -18,7 +18,6 @@ knitr::opts_chunk$set(echo = TRUE)
 library(tidyverse)
 library(cowplot)
 library(viridis)
-#library(sf)
 library(mgcv)
 theme_set(theme_minimal())
 ```
@@ -26,30 +25,23 @@ theme_set(theme_minimal())
 
 ## Data:
 
-```{r data_import_old, comment=NA, eval=FALSE}
-ma_town_coord <- read_csv("../../../data/tidy_data/ma_town_crs4326_coords.csv")
-#ma_town_map <- st_read("../../../data/raw_data/townssurvey_shp/TOWNSSURVEY_POLYM.shp")
-acs_medicare_opioid_merge <- read_csv("../../../data/tidy_data/acs_medicare_opioid_stats_death_rate.csv")
-death_acs_merge_full <- read_csv("../../../data/tidy_data/death_count_norm_to_pop_and_acs_town_demographics_merge_all_cols.csv")
-benzo_pres <- read_csv("../../../data/tidy_data/med_partD_benzo_sum_w_town_merge_13_to_17.csv")
-```
 
-
-```{r}
+```{r data_import, comment=NA}
 ma_town_coord <- read_csv("../../../data/tidy_data/ma_town_crs4326_coords.csv")
 benzo_pres <- read_csv("../../../data/tidy_data/med_partD_benzo_sum_w_town_merge_13_to_17.csv")
 death_acs_opi_pres <- read_csv("../../../data/tidy_data/acs_medicare_opioid_stats_death_count_merge.csv")
 ```
 
 
-
 # Dataset prep
 
 
-```{r}
+```{r dataset_prep_for_model, comment=NA}
 death_acs_opi_coord <- death_acs_opi_pres %>% 
   mutate(id = row_number()) %>% 
   inner_join(ma_town_coord, by = c("city_death" = "town"))
+# what to do with the benzo data? 
+# look at the different drugs and the features related - probably will pick one because features are correlated
 benzo_pres %>% 
   ggplot(aes(sqrt(total_claim_count), sqrt(total_day_supply), color = generic_name)) +
   geom_point(alpha = 0.5, size = 1) +
@@ -70,6 +62,8 @@ benzo_tot_day_supp %>%
   geom_point() +
   facet_wrap(~ year)
 sapply(data.frame(sapply(benzo_tot_day_supp, is.na)), sum)
+# here replace NA with zeroes - already had to drop too many towns
+length(unique(benzo_pres$town))
 benzo_tot_day_supp_nona <- benzo_tot_day_supp %>% 
   replace(is.na(.), 0) %>% 
   rename(city_death = town)
@@ -79,9 +73,11 @@ benzo_tot_day_supp_nona %>%
   geom_point() +
   facet_wrap(~ year)
 benzo_tot_day_supp_nona
+# all 3 of the benzos seem correlated, but may provide different enough information to be individually useful?
 mod_df_count <- death_acs_opi_coord %>% 
   inner_join(benzo_tot_day_supp_nona, by = c("city_death", "year")) %>% 
   mutate(
+    # normalize prescription counts to over 65 population:
     alprazolam_per_65_and_over = alprazolam / over_65_count,
     diazepam_per_65_and_over = diazepam / over_65_count,
     lorazepam_per_65_and_over = lorazepam / over_65_count,
@@ -118,6 +114,7 @@ train_set %>%
   count(year)
 mean(mod_df_count$death_count_next_year)
 var(mod_df_count$death_count_next_year)
+length(unique(mod_df_count$city_death))
 ```
 
 
@@ -408,7 +405,7 @@ GAM check:
 * still ignoring this mostly - alprazolam_per_65_and_over consistently significant, may need more basis functions?
 
 Concurvity:
-* will continue to ignore total population, needs to be in the model
+* will continue to ignore total population concurvity, needs to be in the model
 * pop_struggling_prop, mean_house_inc, less_than_hs_ed still high
 
 RMSE Error:
@@ -447,7 +444,7 @@ rmse(full_model_sub4, valid_set)
 Notes:
 
 GAM Summary:
-* all features statistically significant except alprazolam_per_65_and_over, will leave it in until I deal with all the other concurvity issues
+* all features statistically significant, will now focus on concurvity issues
 
 GAM check:
 * still mostly ignoring this
@@ -496,6 +493,8 @@ rmse(full_model_sub5, valid_set)
 
 
 Notes:
+
+* alprazolam_per_65_and_over now not significant
 
 * Concurvities overall went way up again
 * Error on validation went way up again too
@@ -553,7 +552,7 @@ rmse(full_model_sub6, valid_set)
 Notes:
 
 GAM Summary:
-* alprazolam_per_65_and_over not significant
+* alprazolam_per_65_and_over significant
 
 GAM check:
 * maybe it's time to try upping the k for some of these features?
@@ -604,16 +603,16 @@ rmse(full_model_sub6, valid_set)
 Notes:
 
 GAM Summary:
-* alprazolam_per_65_and_over not significant
+* significance of predictors seems similar
 
 GAM check:
 * although the k's have been increased, the p-values still indicate that more are needed - not sure if it's worth it (will likely lead to worse overfitting)
 
 Concurvity:
-* Worst-case concurvity metrics didn't change between sub 6 and this iteration 
+* Worst-case concurvity metrics didn't change much between sub 6 and this iteration 
 
 RMSE Error:
-* Validation error went down slightly
+* Validation error went down slightly - is it worth it?
 
 
 Likely not worth trying to change k at this point. Back pedal to previous iteration (sub 6) - check concurvities between mean income and population proportion that's struggling
@@ -661,10 +660,10 @@ GAM check:
 * Not much has changed
 
 Concurvity:
-* Wost-case concurvity of `lorazepam_per_65_and_over` with the model has gone way down, but not surpsing since it had a strong relationship with alprazolam feature
+* Wost-case concurvity of `lorazepam_per_65_and_over` with the model has gone way down, not surpsing since it had a strong relationship with alprazolam feature
 
 RMSE Error:
-* Validation error slightly better and concurvity between mean income and poverty metric didn't change much, maybe wait and see to remove alprazolam?
+* Validation error slightly better actually and concurvity between mean income and poverty metric didn't change much, but maybe wait and see to remove alprazolam?
 
 
 Try: sub 6 - but take out mean house inc - strong relationship with pop struggling and x,y:
@@ -698,7 +697,7 @@ Concurvity:
 * all features now have worst-case concurvity estimates below the desired threshold of 0.84
 
 RMSE Error:
-* Error on validation is much higher with this iteration than the previous one (sub6)
+* Error on validation is higher with this iteration than the previous one (sub6)
 
 
 Try taking out poverty metric from model sub 6 instead? Will the validation error be lower with version sub 9 or sub 10?
@@ -723,7 +722,7 @@ rmse(full_model_sub6, valid_set)
 Notes:
 
 GAM Summary:
-* alprazolam_per_65_and_over significant predictor with this model again too
+* N/A
 
 GAM check:
 * ignore
@@ -885,9 +884,9 @@ mod_df_count$fin_pred <- predict(final_model, mod_df_count, type = "response")
 ```{r model_viz_qqplot_all_smooths}
 library(mgcViz)
 final_model_convert <- getViz(final_model)
-qq(final_model_convert, rep = 10, method = "simul1", CI = "normal", showReps = TRUE,
+final_qq_plot <- qq(final_model_convert, rep = 10, method = "simul1", CI = "normal", showReps = TRUE,
         ngr = 1e2, a.replin = list(alpha = 0.1), a.qqpoi = list(shape = 19)) +
-  ggtitle("QQ Plot\nNegative binomial GAM") +
+  ggtitle("QQ Plot\nNegative binomial GAM - Retrained final model") +
   xlab("Theoretical Quantiles") +
   ylab("Deviance Residuals") +
   theme(
@@ -896,6 +895,8 @@ qq(final_model_convert, rep = 10, method = "simul1", CI = "normal", showReps = T
     axis.title = element_text(size = 20),
     plot.title = element_text(size = 20)
     )
+final_qq_plot
+# save_plot doesn't work - save manually in figures/tidy figures/ final_model_retrained_qq_plot.png
 # different variations on result plots
 print(plot(final_model_convert, allTerms = T), pages = 1)
 # directly save this from R plot interface to figures/tidy_figures/full_model_gam_plot.png
