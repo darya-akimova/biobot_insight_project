@@ -237,17 +237,92 @@ pdf output in case notebook doesn't run:
 
 **Goals/Accomplishments:**
 
-* Clean up 
+* Clean up/edit the opioid prescriber and all-drug prescriber Medicare Part D datsets (remove columns, tidy text, etc) 
+* Associated the opioid prescribers with a town in the MA opioid overdose deaths dataset via zip code (using a Mass.gov shapefile with the correct set of town names)
+* Associated the all-drugs prescribers with a town in the MA opioid overdose death count dataset (sidebar - this dataset came with a town column, but the town names did not match up well with the opioid overdose death count towns - see notebook for details). Strategy for association was to merge the all-drug prescribers with the opioid prescribers based on NPI (unique prescriber identifier) to associate the all-drug prescribers with a zip code. Then associated the all-drug prescribers with a town based on that zip code (from previous step, where the opioid prescribers were associated with a town)
+* Extracted benzodiazepine prescription counts (not pretty, but the all-drug prescriber datasets for each year are big). These are rich datasets, worth exploring more for future directions.
 
 
 **Inputs:**
 
-* 
+Medicare Part D opioid prescription summary datasets - by prescriber - one dataset for each year for the years 2013-2017
+
+Local paths:
+
+* 2013: `data/raw_data/medicare_prescription_opioids/Medicare_Part_D_Opioid_Prescriber_Summary_File_2013.csv`
+* 2014: `data/raw_data/medicare_prescription_opioids/Medicare_Part_D_Opioid_Prescriber_Summary_File_2014.csv`
+* 2015: `data/raw_data/medicare_prescription_opioids/Medicare_Part_D_Opioid_Prescriber_Summary_File_2015.csv`
+* 2016: `data/raw_data/medicare_prescription_opioids/Medicare_Part_D_Opioid_Prescriber_Summary_File_2016.csv`
+* 2017: `data/raw_data/medicare_prescription_opioids/Medicare_Part_D_Opioid_Prescriber_Summary_File_2017.csv`
+
+
+Medicare Part D all-drug prescription datasets - by prescriber - one dataset for each year for the years 2013-2017
+
+Local paths:
+
+* 2013: `data/raw_data/medicare_prescription_all_drugs/PartD_Prescriber_PUF_NPI_Drug_13.txt`
+* 2014: `data/raw_data/medicare_prescription_all_drugs/PartD_Prescriber_PUF_NPI_Drug_14.txt`
+* 2015: `data/raw_data/medicare_prescription_all_drugs/PartD_Prescriber_PUF_NPI_Drug_15.txt`
+* 2016: `data/raw_data/medicare_prescription_all_drugs/PartD_Prescriber_PUF_NPI_Drug_16.txt`
+* 2017: `data/raw_data/medicare_prescription_all_drugs/PartD_Prescriber_PUF_NPI_Drug_17.txt`
+
+* Each of these files unzipped is 2.8 to 3GB of data 
+* 2017 dataset loaded in at the start of the notebook to figure out how to best merge the medicare prescription datasets and the opioid overdose death count data, others are loaded in and processed later
+
+
+Zip code - town assiation lists (copied from websites - need to add links):
+
+Local paths
+
+* `data/raw_data/shapefiles_and_geography_related/ma_town_zipcode_list.txt`
+* `data/raw_data/shapefiles_and_geography_related/ma_town_zipcode_list_alt.txt`
+* These were slightly useful
+
+MA postal zip code shapefile with town associations
+
+* Local path: `data/raw_data/shapefiles_and_geography_related/zipcodes_nt/ZIPCODES_NT_POLY.shp`
+* Town names best match for the MA opioid overdose death count dataset
+* Most matches came from this file
+
+Opioid overdose death count data (by town and year) and ACS data merge:
+
+* Local path: `data/tidy_data/overdose_death_count_acs_merge.csv`
+* Output from notebook 4
+
+
+Opioid prescriber dataset, with years 2013-2017 concatenated (rows stacked), duplicate town assignments to postal zip codes resolved:
+
+* Local path: `data/tidy_data/medicare_partD_opioid_prescriber_all_years_no_ziptown_duplicates.csv`
+* Created in notebook 6
+* Used to assign benzodiazepine prescribers to a town (match by npi, year)
 
 
 **Outputs:**
 
+Inidividual prescribers by zip code, associated with town from opioid overdose death count dataset:
 
+Local paths:
+
+* 2013 dataset: `data/tidy_data/medicare_partD_opioid_prescriber_2013_w_zip_MAtown_v1.csv`
+* 2014 dataset: `data/tidy_data/medicare_partD_opioid_prescriber_2014_w_zip_MAtown_v1.csv`
+* 2015 dataset: `data/tidy_data/medicare_partD_opioid_prescriber_2015_w_zip_MAtown_v1.csv`
+* 2016 dataset: `data/tidy_data/medicare_partD_opioid_prescriber_2016_w_zip_MAtown_v1.csv`
+* 2017 dataset: `data/tidy_data/medicare_partD_opioid_prescriber_2017_w_zip_MAtown_v1.csv`
+* Used in notebook 6
+* Some prescribers have multiple town associations per year (resolved -sort of- in notebook 6)
+
+
+Benzodiazepine prescription data years 2013-2017, with each prescriber associated with MA opioid overdose death town
+
+* Local path: `data/tidy_data/med_partD_benzo_indiv_pres_w_town_merge_13_to_17.csv`
+
+Summarized benzodiazepine prescription data years 2013-2017, grouped by town (from opioid overdose death dataset), year, and drug (out of the 3 benzo drugs in the dataset, by geneeric name)
+
+* Local path: `data/tidy_data/med_partD_benzo_sum_w_town_merge_13_to_17.csv`
+
+pdf report - in case notebook doesn't run
+
+* Local path: `products/notebook_5_medicare_opioid_and_nonopioid_prescriber_cleanup_and_town_join.pdf`
 
 
 <br>
