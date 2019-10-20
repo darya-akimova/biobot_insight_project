@@ -1,7 +1,9 @@
 # Predicting and contextualizing city-level opioid overdose deaths across Massachusetts
 #### An Insight Boston Fall 2019 consultation project with [Biobot Analytics](https://www.biobot.io/)
 
-## Goals
+<br>
+
+# Goals
 
 I am an [Insight Health Data Science](https://www.insighthealthdata.com/) Fellow in the Boston, MA Fall 2019 cohort and this was my project.
 
@@ -10,10 +12,11 @@ The project was proposed to Insight by Biobot Analytics with the goal of:
 * Developing a strategy for merging geospatial data at different resolutions
 * Exploring publicly available opioid and non-opioid related datasets and their usefulness in understanding the opioid crisis
 
+<br>
 
-## Dependencies
+# Dependencies
 
-#### Python 
+### Python 
 
 **Use:** Data preprocessing, EDA
 
@@ -22,10 +25,9 @@ The project was proposed to Insight by Biobot Analytics with the goal of:
 * matplotlib
 * seaborn
 * goepandas
-* folium (not crucial to main project)
 
 
-#### R 
+### R 
 
 **Use:** Modeling, Figure generation
 
@@ -33,42 +35,13 @@ The project was proposed to Insight by Biobot Analytics with the goal of:
 * mgcv
 * sf
 
+<br>
 
-## Data
+# Notebooks
 
-#### Raw Data:
+## Data cleaning and feature engineering
 
-##### **City Health dashboard data at city-level**
-
-**Source:** [City Health Dashboard](https://www.cityhealthdashboard.com/)
-
-https://www.cityhealthdashboard.com/data-access
-
-**Data Acquired:** 9/15/2019
-
-**Local Path:** `data/raw_data/500_cities_data/CHDB_data_city_all v7_0.csv`
-
-**Fields:**
-
-Full data codebook was included along with the datasets as part of the download, but particular fields utilized for this analysis were:
-
-
-Name        |  Content
-------------|----------
-state_abbr  | State abbreviation
-city_name   | City name
-metric_name | Metric name (text - specific socioeconomic or health metric)
-group_name  | Demographic group
-est         | Estimate (-999 = not applicable, blank = censored or unavailable)
-
-**Use:** 
-
-
-## Notebooks
-
-### Data cleaning and feature engineering
-
-#### Notebook 1: city_health_dash_500_cities_opioid_corr
+### Notebook 1: City health dashboard 500 cities opioid overdose deaths correlation EDA
 
 **Filename:**
 
@@ -102,8 +75,9 @@ pdf download of notebook (in case notebook won't run)
 * Local path: `products/notebook_1_city_health_dash_500_cities_opioid_corr.pdf`
 
 
+<br>
 
-#### Notebook 2: ma_overdose_deaths_by_town_cleanup_and_explore
+### Notebook 2: Notebook to prep and explore the target MA yearly opioid overdose deaths table data
 
 **Filename:**
 
@@ -147,8 +121,9 @@ pdf notebook report (in case notebook won't run)
 * Local path: `products/notebook_2_ma_overdose_deaths_by_town_cleanup_and_explore.pdf`
 
 
+<br>
 
-#### Notebook 3: ma_overdose_deaths_by_town_cleanup_and_explore
+### Notebook 3: MA cencus block and town join, basic geospatial EDA
 
 **Filename:**
 
@@ -203,8 +178,9 @@ pdf notebook report (in case notebook won't run)
 * Local path: `products/notebook_3_ma_census_block_and_town_match.pdf`
 
 
+<br>
 
-#### Notebook 4: Opioid overdose deaths and ACS dataset merge and EDA
+### Notebook 4: Opioid overdose deaths and ACS dataset merge and EDA
 
 **Filename:**
 
@@ -216,6 +192,7 @@ pdf notebook report (in case notebook won't run)
 
 
 **Inputs:**
+
 Opioid overdose deaths per MA town/city, grouped by place of death occurence - used to compare to MA town survey shapefile to determine if towns match up.
 
 * Local path: `data/tidy_data/ma_town_opioid_overdose_death_by_place_of_death_2014_to_2018.csv`
@@ -249,9 +226,172 @@ pdf output in case notebook doesn't run:
 * Local path: `products/notebook_4_overdose_death_and_acs_by_census_block_merge_and_eda.pdf`
 
 
-### Modeling
+<br>
 
-#### gam_modeling
+### Notebook 5: Medicare opioid and non-opioid prescriber datasets cleanup and town join
+
+**Filename:**
+
+`code/cleaning_and_eda/notebook_5_medicare_opioid_and_nonopioid_prescriber_cleanup_and_town_join.ipynb`
+
+
+**Goals/Accomplishments:**
+
+* Clean up/edit the opioid prescriber and all-drug prescriber Medicare Part D datsets (remove columns, tidy text, etc) 
+* Associated the opioid prescribers with a town in the MA opioid overdose deaths dataset via zip code (using a Mass.gov shapefile with the correct set of town names)
+* Associated the all-drugs prescribers with a town in the MA opioid overdose death count dataset (sidebar - this dataset came with a town column, but the town names did not match up well with the opioid overdose death count towns - see notebook for details). Strategy for association was to merge the all-drug prescribers with the opioid prescribers based on NPI (unique prescriber identifier) to associate the all-drug prescribers with a zip code. Then associated the all-drug prescribers with a town based on that zip code (from previous step, where the opioid prescribers were associated with a town)
+* Extracted benzodiazepine prescription counts (not pretty, but the all-drug prescriber datasets for each year are big). These are rich datasets, worth exploring more for future directions.
+
+
+**Inputs:**
+
+Medicare Part D opioid prescription summary datasets - by prescriber - one dataset for each year for the years 2013-2017
+
+Local paths:
+
+* 2013: `data/raw_data/medicare_prescription_opioids/Medicare_Part_D_Opioid_Prescriber_Summary_File_2013.csv`
+* 2014: `data/raw_data/medicare_prescription_opioids/Medicare_Part_D_Opioid_Prescriber_Summary_File_2014.csv`
+* 2015: `data/raw_data/medicare_prescription_opioids/Medicare_Part_D_Opioid_Prescriber_Summary_File_2015.csv`
+* 2016: `data/raw_data/medicare_prescription_opioids/Medicare_Part_D_Opioid_Prescriber_Summary_File_2016.csv`
+* 2017: `data/raw_data/medicare_prescription_opioids/Medicare_Part_D_Opioid_Prescriber_Summary_File_2017.csv`
+
+
+Medicare Part D all-drug prescription datasets - by prescriber - one dataset for each year for the years 2013-2017
+
+Local paths:
+
+* 2013: `data/raw_data/medicare_prescription_all_drugs/PartD_Prescriber_PUF_NPI_Drug_13.txt`
+* 2014: `data/raw_data/medicare_prescription_all_drugs/PartD_Prescriber_PUF_NPI_Drug_14.txt`
+* 2015: `data/raw_data/medicare_prescription_all_drugs/PartD_Prescriber_PUF_NPI_Drug_15.txt`
+* 2016: `data/raw_data/medicare_prescription_all_drugs/PartD_Prescriber_PUF_NPI_Drug_16.txt`
+* 2017: `data/raw_data/medicare_prescription_all_drugs/PartD_Prescriber_PUF_NPI_Drug_17.txt`
+
+* Each of these files unzipped is 2.8 to 3GB of data 
+* 2017 dataset loaded in at the start of the notebook to figure out how to best merge the medicare prescription datasets and the opioid overdose death count data, others are loaded in and processed later
+
+
+Zip code - town assiation lists (copied from websites - need to add links):
+
+Local paths
+
+* `data/raw_data/shapefiles_and_geography_related/ma_town_zipcode_list.txt`
+* `data/raw_data/shapefiles_and_geography_related/ma_town_zipcode_list_alt.txt`
+* These were slightly useful
+
+MA postal zip code shapefile with town associations
+
+* Local path: `data/raw_data/shapefiles_and_geography_related/zipcodes_nt/ZIPCODES_NT_POLY.shp`
+* Town names best match for the MA opioid overdose death count dataset
+* Most matches came from this file
+
+Opioid overdose death count data (by town and year) and ACS data merge:
+
+* Local path: `data/tidy_data/overdose_death_count_acs_merge.csv`
+* Output from notebook 4
+
+
+Opioid prescriber dataset, with years 2013-2017 concatenated (rows stacked), duplicate town assignments to postal zip codes resolved:
+
+* Local path: `data/tidy_data/medicare_partD_opioid_prescriber_all_years_no_ziptown_duplicates.csv`
+* Created in notebook 6
+* Used to assign benzodiazepine prescribers to a town (match by npi, year)
+
+
+**Outputs:**
+
+Inidividual prescribers by zip code, associated with town from opioid overdose death count dataset:
+
+Local paths:
+
+* 2013 dataset: `data/tidy_data/medicare_partD_opioid_prescriber_2013_w_zip_MAtown_v1.csv`
+* 2014 dataset: `data/tidy_data/medicare_partD_opioid_prescriber_2014_w_zip_MAtown_v1.csv`
+* 2015 dataset: `data/tidy_data/medicare_partD_opioid_prescriber_2015_w_zip_MAtown_v1.csv`
+* 2016 dataset: `data/tidy_data/medicare_partD_opioid_prescriber_2016_w_zip_MAtown_v1.csv`
+* 2017 dataset: `data/tidy_data/medicare_partD_opioid_prescriber_2017_w_zip_MAtown_v1.csv`
+* Used in notebook 6
+* Some prescribers have multiple town associations per year (resolved -sort of- in notebook 6)
+
+
+Benzodiazepine prescription data years 2013-2017, with each prescriber associated with MA opioid overdose death town
+
+* Local path: `data/tidy_data/med_partD_benzo_indiv_pres_w_town_merge_13_to_17.csv`
+
+Summarized benzodiazepine prescription data years 2013-2017, grouped by town (from opioid overdose death dataset), year, and drug (out of the 3 benzo drugs in the dataset, by geneeric name)
+
+* Local path: `data/tidy_data/med_partD_benzo_sum_w_town_merge_13_to_17.csv`
+
+pdf report - in case notebook doesn't run
+
+* Local path: `products/notebook_5_medicare_opioid_and_nonopioid_prescriber_cleanup_and_town_join.pdf`
+
+
+<br>
+
+### Notebook 6: MA opioid overdose death, ACS, and Medicare part D data merge
+
+**Filename:**
+
+`code/analysis/python_notebooks/notebook_6_ma_opioid_overdose_death_and_acs_and_partD_drug_match_by_town.ipynb`
+
+**Goals/Accomplishments:**
+
+* Resolved NPI prescribers being assigned to more than one town (zip code matched to more than one town most likely) - issue from notebook 5
+* Filled in missing opioid prescription counts (simple fill in based on codebook suggestion)
+* Associated towns (opioid overdose death rates + acs) and medicare drug spending/claim counts
+* EDA on potential relationship between opioid overdose deaths and opioid or benzo claims
+
+
+**Inputs:**
+
+Opioid overdose death count data (by town and year) and ACS data merge:
+
+* Local path: `data/tidy_data/overdose_death_count_acs_merge.csv`
+* Output from notebook 4
+
+Inidividual prescribers by zip code, associated with town from opioid overdose death count dataset:
+
+Local paths:
+
+* 2013 dataset: `data/tidy_data/medicare_partD_opioid_prescriber_2013_w_zip_MAtown_v1.csv`
+* 2014 dataset: `data/tidy_data/medicare_partD_opioid_prescriber_2014_w_zip_MAtown_v1.csv`
+* 2015 dataset: `data/tidy_data/medicare_partD_opioid_prescriber_2015_w_zip_MAtown_v1.csv`
+* 2016 dataset: `data/tidy_data/medicare_partD_opioid_prescriber_2016_w_zip_MAtown_v1.csv`
+* 2017 dataset: `data/tidy_data/medicare_partD_opioid_prescriber_2017_w_zip_MAtown_v1.csv`
+* Output from notebook 5
+
+
+**Outputs:**
+
+Opioid prescriber dataset, with years 2013-2017 concatenated (rows stacked), duplicate town assignments to postal zip codes resolved:
+
+* Local path: `data/tidy_data/medicare_partD_opioid_prescriber_all_years_no_ziptown_duplicates.csv`
+* Used back in notebook 5 to assing the benzodiazepine prescribers to a town (so that things match up)
+
+
+Opioid overdose death count data and ACS data, transformed to a long format
+
+* Local path: `data/tidy_data/overdose_death_count_acs_merge_long_format.csv`
+* For plotting
+* Major change is that the individual death count years and the individual total population columns have each been gathered into one for each variable
+* Opioid overdose death column converted to "death count next year" column (year has been shifted down by 1) to match modeling strategy (feature data from year before predicts death count per town the following year)
+
+
+Merged opioid overdose death count data, ACS, and Medicare opioid prescription rates (summarized):
+
+* Local path: `data/tidy_data/acs_medicare_opioid_stats_death_count_merge.csv`
+* 294 towns after this merge (towns removed because no opioid prescribers in them, according to Medicare)
+* Used for modeling (notebook 7)
+
+pdf output in case notebook doesn't run:
+
+* `products/
+
+
+<br>
+
+## Modeling
+
+### Notebook 7: GAM modeling in R
 
 **Filename:**
 
@@ -268,8 +408,62 @@ pdf output in case notebook doesn't run:
 **Outputs:**
 
 
+<br>
 
-## Results
+
+### Notebook 8: Figure generation in R
+
+**Filename:**
+
+`code/.rmd`
+
+**Goals/Accomplishments:**
+
+
+
+**Inputs:**
+
+
+
+**Outputs:**
+
+
+<br>
+
+# Data
+
+## Raw Data:
+
+#### City Health dashboard data at city-level
+
+**Source:** [City Health Dashboard](https://www.cityhealthdashboard.com/)
+
+https://www.cityhealthdashboard.com/data-access
+
+**Data Acquired:** 9/15/2019
+
+**Local Path:** `data/raw_data/500_cities_data/CHDB_data_city_all v7_0.csv`
+
+**Fields:**
+
+Full data codebook was included along with the datasets as part of the download, but particular fields utilized for this analysis were:
+
+
+Name        |  Content
+------------|----------
+state_abbr  | State abbreviation
+city_name   | City name
+metric_name | Metric name (text - specific socioeconomic or health metric)
+group_name  | Demographic group
+est         | Estimate (-999 = not applicable, blank = censored or unavailable)
+
+**Use:** 
+
+
+<br>
+
+
+# Results
 
 * [Blog post](https://medium.com/@dvakimova/predicting-and-contextualizing-opioid-overdose-deaths-across-massachusetts-b1bc59e43db8) discussing this work
 * [Demo Slides](https://www.slideshare.net/DaryaAkimova/insight-week-4-demo-179338716) used to present this project

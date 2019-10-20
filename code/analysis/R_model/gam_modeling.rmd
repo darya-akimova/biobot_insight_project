@@ -26,7 +26,7 @@ theme_set(theme_minimal())
 
 ## Data:
 
-```{r data_import, comment=NA}
+```{r data_import_old, comment=NA, eval=FALSE}
 ma_town_coord <- read_csv("../../../data/tidy_data/ma_town_crs4326_coords.csv")
 #ma_town_map <- st_read("../../../data/raw_data/townssurvey_shp/TOWNSSURVEY_POLYM.shp")
 acs_medicare_opioid_merge <- read_csv("../../../data/tidy_data/acs_medicare_opioid_stats_death_rate.csv")
@@ -35,43 +35,21 @@ benzo_pres <- read_csv("../../../data/tidy_data/med_partD_benzo_sum_w_town_merge
 ```
 
 
+```{r}
+ma_town_coord <- read_csv("../../../data/tidy_data/ma_town_crs4326_coords.csv")
+benzo_pres <- read_csv("../../../data/tidy_data/med_partD_benzo_sum_w_town_merge_13_to_17.csv")
+death_acs_opi_pres <- read_csv("../../../data/tidy_data/acs_medicare_opioid_stats_death_count_merge.csv")
+```
+
+
+
 # Dataset prep
 
 
 ```{r}
-acs_medicare_opioid_merge <- acs_medicare_opioid_merge %>% 
+death_acs_opi_coord <- death_acs_opi_pres %>% 
   mutate(id = row_number()) %>% 
   inner_join(ma_town_coord, by = c("city_death" = "town"))
-colnames(acs_medicare_opioid_merge)
-table(acs_medicare_opioid_merge$year)
-
-colnames(death_acs_merge_full)
-yearly_pop <- death_acs_merge_full %>% 
-  select(city_death, tot_pop_17, tot_pop_16:tot_pop_13) %>% 
-  gather(key="year", value="tot_pop", -city_death) %>% 
-  mutate(
-    year = case_when(
-      year == "tot_pop_17" ~ 2017,
-      year == "tot_pop_16" ~ 2016,
-      year == "tot_pop_15" ~ 2015,
-      year == "tot_pop_14" ~ 2014,
-      year == "tot_pop_13" ~ 2013,
-      TRUE ~ 0
-    )
-  )
-
-mod_df_count <- acs_medicare_opioid_merge %>% 
-  select(-c(tot_pop_17, over_65_prop, mean_med_inc_desp)) %>% 
-  inner_join(yearly_pop, by = c("city_death", "year"))
-mod_df_count
-yearly_death_count <- death_acs_merge_full %>% 
-  select(city_death, `2014`:`2018`) %>% 
-  gather(key="year", value="death_count_next_year", -city_death) %>% 
-  mutate(year = as.numeric(year) - 1)
-yearly_death_count
-mod_df_count <- yearly_death_count %>% 
-  inner_join(mod_df_count, by = c("city_death", "year"))
-mod_df_count
 benzo_pres %>% 
   ggplot(aes(sqrt(total_claim_count), sqrt(total_day_supply), color = generic_name)) +
   geom_point(alpha = 0.5, size = 1) +
@@ -101,7 +79,7 @@ benzo_tot_day_supp_nona %>%
   geom_point() +
   facet_wrap(~ year)
 benzo_tot_day_supp_nona
-mod_df_count <- mod_df_count %>% 
+mod_df_count <- death_acs_opi_coord %>% 
   inner_join(benzo_tot_day_supp_nona, by = c("city_death", "year")) %>% 
   mutate(
     alprazolam_per_65_and_over = alprazolam / over_65_count,
@@ -109,7 +87,8 @@ mod_df_count <- mod_df_count %>%
     lorazepam_per_65_and_over = lorazepam / over_65_count,
     tot_benzo_count = alprazolam + diazepam + lorazepam,
     tot_benzo_per_65_and_over = tot_benzo_count / over_65_count
-  )
+  ) %>% 
+  select(-c(alprazolam, diazepam, lorazepam, town))
 colnames(mod_df_count)
 summary(mod_df_count)
 sapply(data.frame(sapply(mod_df_count, is.na)), sum)
@@ -384,7 +363,7 @@ Concurvity:
 
 RMSE Error:
 * training error about the same as previous iteration (sub1)
-* validation error slightly less than previous iteration (sub1)
+* validation error slightly less than previous iteration (sub1) - but almost the same
 
 
 Individual feature concurvity check:
@@ -423,7 +402,7 @@ rmse(full_model_sub3, valid_set)
 Notes:
 
 GAM Summary:
-* urb_v_rururban and now alprazolam_per_65_and_over not significant
+* urb_v_rururban not significant
 
 GAM check:
 * still ignoring this mostly - alprazolam_per_65_and_over consistently significant, may need more basis functions?
@@ -448,7 +427,7 @@ full_model_sub3_conc %>%
 ```
 
 
-Sub4 - remove at or below poverty - not informative/predictive
+Sub4 - remove urban v rural - not informative/predictive
 
 ```{r full_sub4}
 full_model_sub4 <- gam(
@@ -634,7 +613,7 @@ Concurvity:
 * Worst-case concurvity metrics didn't change between sub 6 and this iteration 
 
 RMSE Error:
-* Validation error went up slightly
+* Validation error went down slightly
 
 
 Likely not worth trying to change k at this point. Back pedal to previous iteration (sub 6) - check concurvities between mean income and population proportion that's struggling
@@ -685,7 +664,7 @@ Concurvity:
 * Wost-case concurvity of `lorazepam_per_65_and_over` with the model has gone way down, but not surpsing since it had a strong relationship with alprazolam feature
 
 RMSE Error:
-* Validation error slightly worse and concurvity between mean income and poverty metric didn't change much, maybe wait and see to remove alprazolam?
+* Validation error slightly better and concurvity between mean income and poverty metric didn't change much, maybe wait and see to remove alprazolam?
 
 
 Try: sub 6 - but take out mean house inc - strong relationship with pop struggling and x,y:
@@ -710,7 +689,7 @@ rmse(full_model_sub6, valid_set)
 Notes:
 
 GAM Summary:
-* `alprazolam_per_65_and_over` now significant predictor
+* n/A
 
 GAM check:
 * ignore
@@ -755,6 +734,26 @@ Concurvity:
 RMSE Error:
 * Validation error actually went down between previous iteration (sub6) and this one, much better than when the mean income was removed (sub9)
 
+
+Last check - does removing the town shrunk/grown feature change things?
+
+```{r}
+full_model_sub10_alt <- gam(
+    death_count_next_year ~ s(x,y) + s(year, k=3) + s(tot_pop) + s(mean_house_inc) + s(opioid_rate_avg) + s(alprazolam_per_65_and_over) + s(lorazepam_per_65_and_over),
+    data = train_set, method = "REML", family = nb(), select = TRUE
+    )
+summary(full_model_sub10_alt)
+gam.check(full_model_sub10_alt)
+concurvity(full_model_sub10_alt)
+qq.gam(full_model_sub10_alt, cex = 4)
+# error on training
+rmse(full_model_sub10_alt, train_set)
+# error on validation
+rmse(full_model_sub10, valid_set)
+rmse(full_model_sub10_alt, valid_set)
+```
+
+A: no
 
 - Features tentatively finalized
 
@@ -842,7 +841,7 @@ rmse(full_model_sub10, valid_set)
 ```
 
 
-Model is now much, much worse - just go with model iteration 10 as the final formulation.
+Model is about the same - just go with model iteration 10 as the final formulation.
 
 
 Retrain this formulation on the 2014-2017 data (2013-2016 here)
