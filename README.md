@@ -252,27 +252,71 @@ pdf output in case notebook doesn't run:
 
 <br>
 
-### Notebook 6: 
+### Notebook 6: MA opioid overdose death, ACS, and Medicare part D data merge
 
 **Filename:**
 
-`code/cleaning_and_eda/.ipynb`
+`code/analysis/python_notebooks/notebook_6_ma_opioid_overdose_death_and_acs_and_partD_drug_match_by_town.ipynb`
 
 **Goals/Accomplishments:**
+
+* Resolved NPI prescribers being assigned to more than one town (zip code matched to more than one town most likely) - issue from notebook 5
+* Filled in missing opioid prescription counts (simple fill in based on codebook suggestion)
+* Associated towns (opioid overdose death rates + acs) and medicare drug spending/claim counts
+* EDA on potential relationship between opioid overdose deaths and opioid or benzo claims
 
 
 **Inputs:**
 
+Opioid overdose death count data (by town and year) and ACS data merge:
+
+* Local path: `data/tidy_data/overdose_death_count_acs_merge.csv`
+* Output from notebook 4
+
+Inidividual prescribers by zip code, associated with town from opioid overdose death count dataset:
+
+Local paths:
+
+* 2013 dataset: `data/tidy_data/medicare_partD_opioid_prescriber_2013_w_zip_MAtown_v1.csv`
+* 2014 dataset: `data/tidy_data/medicare_partD_opioid_prescriber_2014_w_zip_MAtown_v1.csv`
+* 2015 dataset: `data/tidy_data/medicare_partD_opioid_prescriber_2015_w_zip_MAtown_v1.csv`
+* 2016 dataset: `data/tidy_data/medicare_partD_opioid_prescriber_2016_w_zip_MAtown_v1.csv`
+* 2017 dataset: `data/tidy_data/medicare_partD_opioid_prescriber_2017_w_zip_MAtown_v1.csv`
+* Output from notebook 5
 
 
 **Outputs:**
+
+Opioid prescriber dataset, with years 2013-2017 concatenated (rows stacked), duplicate town assignments to postal zip codes resolved:
+
+* Local path: `data/tidy_data/medicare_partD_opioid_prescriber_all_years_no_ziptown_duplicates.csv`
+* Used back in notebook 5 to assing the benzodiazepine prescribers to a town (so that things match up)
+
+
+Opioid overdose death count data and ACS data, transformed to a long format
+
+* Local path: `data/tidy_data/overdose_death_count_acs_merge_long_format.csv`
+* For plotting
+* Major change is that the individual death count years and the individual total population columns have each been gathered into one for each variable
+* Opioid overdose death column converted to "death count next year" column (year has been shifted down by 1) to match modeling strategy (feature data from year before predicts death count per town the following year)
+
+
+Merged opioid overdose death count data, ACS, and Medicare opioid prescription rates (summarized):
+
+* Local path: `data/tidy_data/acs_medicare_opioid_stats_death_count_merge.csv`
+* 294 towns after this merge (towns removed because no opioid prescribers in them, according to Medicare)
+* Used for modeling (notebook 7)
+
+pdf output in case notebook doesn't run:
+
+* `products/
 
 
 <br>
 
 ## Modeling
 
-### gam_modeling
+### Notebook 7: GAM modeling in R
 
 **Filename:**
 
@@ -291,6 +335,25 @@ pdf output in case notebook doesn't run:
 
 <br>
 
+
+### Notebook 8: Figure generation in R
+
+**Filename:**
+
+`code/.rmd`
+
+**Goals/Accomplishments:**
+
+
+
+**Inputs:**
+
+
+
+**Outputs:**
+
+
+<br>
 
 # Data
 
