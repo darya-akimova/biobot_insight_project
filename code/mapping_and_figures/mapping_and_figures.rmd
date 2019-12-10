@@ -30,6 +30,7 @@ death_and_acs_data <- read_csv("../../data/tidy_data/overdose_death_count_acs_me
 ma_total_deaths <- read_csv("../../data/tidy_data/ma_total_overdose_for_graph.csv")
 mod_df_count <- read_csv("../../data/tidy_data/final_model_df_with_features_and_pred.csv")
 ma_town_map <- st_read("../../data/raw_data/shapefiles_and_geography_related/townssurvey_shp/TOWNSSURVEY_POLYM.shp")
+death_and_acs_wide <- read_csv("../../data/tidy_data/overdose_death_count_acs_merge.csv")
 ```
 
 
@@ -345,3 +346,76 @@ death_rate_comp_plot
 #  base_width = 16
 #  )
 ```
+
+
+## For EB Smoothing
+
+
+```{r}
+death_rates_and_prop <- death_and_acs_wide %>% 
+  mutate(
+    tot_pop_18 = tot_pop_17 + (tot_pop_17 - tot_pop_16),
+    death_rate_14 = (`2014` / tot_pop_14) * 10000,
+    death_rate_15 = (`2015` / tot_pop_15) * 10000,
+    death_rate_16 = (`2016` / tot_pop_16) * 10000,
+    death_rate_17 = (`2017` / tot_pop_17) * 10000,
+    death_rate_18 = (`2018` / tot_pop_18) * 10000
+    ) %>% 
+  select(city_death, starts_with("death_rate"), over_65_prop, less_than_hs_ed, at_or_below_pov_prop, pop_struggling_prop)
+death_rates_and_prop
+ma_town_map %>% 
+  anti_join(
+    death_rates_and_prop %>% 
+      mutate(city_death = str_to_upper(city_death)),
+     by = c("TOWN" = "city_death")
+  )
+death_rates_and_prop %>% 
+  mutate(city_death = str_to_upper(city_death)) %>% 
+  anti_join(ma_town_map, by = c("city_death" = "TOWN"))
+death_rates_and_prop <- death_rates_and_prop %>% 
+  mutate(city_death = str_to_upper(city_death))
+death_rates_and_prop
+#write_csv(death_rates_and_prop, "../../data/tidy_data/death_rates_for_EB_smooth.csv")
+death_counts_for_eb_smooth <- death_and_acs_wide %>% 
+  mutate(
+    tot_pop_18 = tot_pop_17 + (tot_pop_17 - tot_pop_16),
+    city_death = str_to_upper(city_death)
+  ) %>% 
+  select(city_death:tot_pop_17, tot_pop_18) %>% 
+  select(-tot_pop_13)
+death_counts_for_eb_smooth
+#write_csv(death_counts_for_eb_smooth, "../../data/tidy_data/death_counts_for_EB_smooth.csv")
+```
+
+
+Results of smoothing:
+
+```{r}
+eb_smooth_rates <- read_csv("../../data/tidy_data/EB_smoothed_death_rates.csv") %>% 
+  select(TOWN, `2014`:EB_rate_18)
+eb_smooth_rates
+map_eb_rates <- ma_town_map %>% 
+  inner_join(eb_smooth_rates, by = "TOWN") %>% 
+  mutate_at(vars(matches("EB_rate")), function(x) x * 10000) %>% 
+  select(-c(TOWN_ID:FOURCOLOR))
+map_eb_rates
+map_eb_rates %>%
+  ggplot() +
+  geom_sf(aes(fill = EB_rate_18), color = "black") +
+  scale_fill_viridis_c(option = "D", name = "Count") +
+  theme(axis.text.x = element_blank(), axis.text.y = element_blank()) +
+  ggtitle("Opioid overdose death counts per town\n2018 - EB Smoothed")
+map_eb_rates %>%
+  ggplot() +
+  geom_sf(aes(fill = `2018` * 10000 / tot_pop_18), color = "black") +
+  scale_fill_viridis_c(option = "D", name = "Count") +
+  theme(axis.text.x = element_blank(), axis.text.y = element_blank()) +
+  ggtitle("Opioid overdose death counts per town\n2018 - EB Smoothed")
+map_eb_rates %>%
+  ggplot() +
+  geom_sf(aes(fill = EB_rate_17), color = "black") +
+  scale_fill_viridis_c(option = "D", name = "Count") +
+  theme(axis.text.x = element_blank(), axis.text.y = element_blank()) +
+  ggtitle("Opioid overdose death counts per town\n2017 - EB Smoothed")
+```
+
