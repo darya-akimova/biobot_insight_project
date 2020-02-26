@@ -1,0 +1,156 @@
+---
+title: "prescription_smoothing"
+author: "Darya Akimova"
+date: "2/25/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(tidyverse)
+```
+
+
+```{r}
+benzo <- read_csv("../../data/tidy_data/med_partD_benzo_sum_w_town_merge_13_to_17.csv")
+opi_pres <- read_csv("../../data/tidy_data/medicare_partD_opioid_prescriber_all_years_no_ziptown_duplicates.csv")
+all_towns <- read_csv("../../data/tidy_data/eb_smooth_data/eb_smoothed_pov_and_edu_metrics.csv")
+```
+
+
+```{r}
+benzo <- benzo %>% 
+  mutate(town = str_to_upper(town))
+benzo %>% 
+  anti_join(all_towns, by = c("town"="TOWN"))
+town_benzo_merge <- all_towns %>% 
+  select(TOWN) %>% 
+  left_join(benzo, by = c("TOWN" = "town"))
+town_benzo_count <-  town_benzo_merge %>% 
+  group_by(TOWN, generic_name) %>% 
+  count() 
+town_benzo_count %>% 
+  ggplot(aes(n)) +
+  geom_histogram(bins=30)
+town_benzo_count %>% 
+  filter(n < 5)
+
+benzo %>% 
+  select(generic_name) %>% 
+  unique()
+benzo
+
+town_year <- tibble(TOWN = sort(rep(all_towns$TOWN, 5)), year = rep(c(2013:2017), nrow(all_towns)))
+town_year_drug <- town_year %>% 
+  mutate(generic_name = "alprazolam") %>% 
+  bind_rows(
+    town_year %>% 
+      mutate(generic_name = "diazepam")
+  ) %>% 
+  bind_rows(
+    town_year %>% 
+      mutate(generic_name = "lorazepam")
+  ) %>% 
+  select(TOWN, generic_name, everything()) %>% 
+  mutate(
+    total_claim_count = 0,
+    total_30_day_fill_count = 0,
+    total_day_supply = 0,
+    total_drug_cost = 0
+  ) %>% 
+  rename(town = TOWN)
+town_year_drug
+benzo
+# town/year/drug combos missing from benzo:
+benzo %>% 
+  anti_join(town_year_drug, by = c("town", "generic_name", "year"))
+town_year_drug_full_long <- town_year_drug %>% 
+  anti_join(benzo, by = c("town", "generic_name", "year")) %>% 
+  bind_rows(benzo) %>% 
+  arrange(town, generic_name, year) 
+town_year_drug_full_long  
+benzo_for_eb_smooth <- town_year_drug_full_long %>% 
+  select(town:total_claim_count) %>% 
+  unite("year_drug", generic_name:year, sep = "_") %>% 
+  pivot_wider(names_from = year_drug, values_from = total_claim_count) %>% 
+  inner_join(
+    all_towns %>% 
+      select(TOWN, ovr_65c),
+    by = c("town" = "TOWN")
+  )
+benzo_for_eb_smooth
+town_year
+opi_pres_town_sum <- opi_pres %>% 
+  group_by(town, year) %>% 
+  summarize(opi_claims_per_year = sum(total_claim_count)) %>% 
+  ungroup() %>% 
+  mutate(town = str_to_upper(town)) %>% 
+  rename(TOWN = town)
+opi_pres_town_sum
+opi_town_full <- town_year %>% 
+  mutate(opi_claims_per_year = 0) %>% 
+  anti_join(opi_pres_town_sum, by = "TOWN") %>% 
+  bind_rows(opi_pres_town_sum) %>% 
+  arrange(TOWN, year) %>% 
+  mutate(drug = "opi") %>% 
+  unite("drug_year", c("drug", "year"), sep = "_") %>% 
+  pivot_wider(names_from = drug_year, values_from = opi_claims_per_year)
+opi_town_full
+
+full_drug_count_for_eb <- benzo_for_eb_smooth %>% 
+  inner_join(opi_town_full, by = c("town" = "TOWN")) %>% 
+  select(town, ovr_65c, everything())
+full_drug_count_for_eb
+tot_benzo <- town_year_drug_full_long %>% 
+  group_by(town, year) %>% 
+  summarize(tot_benzo = sum(total_claim_count)) %>% 
+  mutate(drug = "tot_benzo") %>% 
+  unite("drug_year", c("drug", "year")) %>% 
+  pivot_wider(names_from = drug_year, values_from = tot_benzo)
+tot_benzo
+full_drug_count_for_eb <- full_drug_count_for_eb %>% 
+  inner_join(tot_benzo, by = "town")
+#write_csv(full_drug_count_for_eb, path = "../../data/tidy_data/eb_smooth_data/drug_counts_for_eb_smooth.csv")
+```
+
+
+Cleanup of result:
+
+```{r}
+raw_eb_smoothed <- read_csv("../../data/tidy_data/eb_smooth_data/eb_smoothed_drug_pres_rates.csv")
+```
+
+
+```{r}
+tidied_eb_pres_rates <- raw_eb_smoothed %>% 
+  select(TOWN, starts_with("eb")) %>% 
+  pivot_longer(eb_alpra_13:eb_tot_benzo_17, names_to = "drug_year", values_to = "eb_rate_estimate") %>% 
+  mutate(
+    year = ifelse(
+      str_detect(drug_year, "13"), 2013,
+      ifelse(
+        str_detect(drug_year, "14"), 2014,
+        ifelse(
+          str_detect(drug_year, "15"), 2015,
+          ifelse(
+            str_detect(drug_year, "16"), 2016, 2017
+          )))),
+    drug = ifelse(
+      str_detect(drug_year, "alpra"), "alprazolam",
+      ifelse(
+        str_detect(drug_year, "diaze"), "diazepam",
+        ifelse(
+          str_detect(drug_year, "loraz"), "lorazepam",
+          ifelse(
+            str_detect(drug_year, "opi"), "tot_opioid", "tot_benzo"
+          ))))
+    ) %>% 
+  arrange(TOWN, drug, year) %>% 
+  select(-drug_year)
+tidied_eb_pres_rates
+#write_csv(tidied_eb_pres_rates, path = "../../data/tidy_data/eb_smooth_data/tidied_eb_smoothed_pres_rates.csv")
+```
+
