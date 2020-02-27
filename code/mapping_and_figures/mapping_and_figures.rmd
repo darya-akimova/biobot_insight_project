@@ -18,6 +18,7 @@ library(tidyverse)
 library(ggridges)
 library(cowplot)
 library(viridis)
+library(ggthemes)
 library(sf)
 theme_set(theme_minimal())
 ```
@@ -391,31 +392,310 @@ death_counts_for_eb_smooth
 Results of smoothing:
 
 ```{r}
-eb_smooth_rates <- read_csv("../../data/tidy_data/EB_smoothed_death_rates.csv") %>% 
+ma_town_map <- st_read("../../data/raw_data/shapefiles_and_geography_related/townssurvey_shp/TOWNSSURVEY_POLYM.shp")
+eb_smooth_rates <- read_csv("../../data/tidy_data/eb_smooth_data/EB_smoothed_death_rates.csv") %>% 
   select(TOWN, `2014`:EB_rate_18)
-eb_smooth_rates
-map_eb_rates <- ma_town_map %>% 
-  inner_join(eb_smooth_rates, by = "TOWN") %>% 
-  mutate_at(vars(matches("EB_rate")), function(x) x * 10000) %>% 
-  select(-c(TOWN_ID:FOURCOLOR))
-map_eb_rates
-map_eb_rates %>%
+rate_ma_town_map <- ma_town_map %>% 
+  select(-c(POP1980:POPCH90_00, POP2010:POPCH00_10)) %>% 
+  mutate(
+    raw_rate_2014 = X2014 * 10000 / tot_pop_14,
+    raw_rate_2015 = X2015 * 10000 / tot_pop_15,
+    raw_rate_2016 = X2016 * 10000 / tot_pop_16,
+    raw_rate_2017 = X2017 * 10000 / tot_pop_17,
+    raw_rate_2018 = X2018 * 10000 / tot_pop_18
+    ) %>% 
+  select(-c(X2014:tot_pop_18)) %>% 
+  mutate(TOWN = str_to_lower(TOWN)) %>% 
+  mutate(
+    EB_rate_14 = EB_rate_14 * 10000,
+    EB_rate_15 = EB_rate_15 * 10000,
+    EB_rate_16 = EB_rate_16 * 10000,
+    EB_rate_17 = EB_rate_17 * 10000,
+    EB_rate_18 = EB_rate_18 * 10000
+  )
+rate_ma_town_map
+
+
+
+#eb_smooth_rates
+#map_eb_rates <- ma_town_map %>% 
+#  inner_join(eb_smooth_rates, by = "TOWN") %>% 
+#  mutate_at(vars(matches("EB_rate")), function(x) x * 10000) 
+rate_ma_town_map %>%
+  ggplot() +
+  geom_sf(aes(fill = raw_rate_2018), color = "black") +
+  scale_fill_viridis_c(option = "D", name = "Count") +
+  theme(axis.text.x = element_blank(), axis.text.y = element_blank()) +
+  ggtitle("Opioid overdose death rate per 10k residents\n2018 - Raw")
+rate_ma_town_map %>%
   ggplot() +
   geom_sf(aes(fill = EB_rate_18), color = "black") +
   scale_fill_viridis_c(option = "D", name = "Count") +
   theme(axis.text.x = element_blank(), axis.text.y = element_blank()) +
-  ggtitle("Opioid overdose death counts per town\n2018 - EB Smoothed")
-map_eb_rates %>%
+  ggtitle("Opioid overdose death rate per 10k residents\n2018 - EB Smoothed")
+
+
+rates_df <- rate_ma_town_map %>% 
+  select(TOWN, EB_rate_14:raw_rate_2018)
+st_geometry(rates_df) <- NULL
+rates_df_long <- rates_df %>% 
+  as_tibble() %>% 
+  pivot_longer(EB_rate_14:raw_rate_2018, names_to = "type_year", values_to = "rate_per_10k") %>% 
+  mutate(
+    rate_type = ifelse(str_detect(type_year, "EB"), "EB", "raw"),
+    year = ifelse(
+      str_detect(type_year, "14"), 2014,
+      ifelse(
+        str_detect(type_year, "15"), 2015,
+        ifelse(
+          str_detect(type_year, "16"), 2016,
+          ifelse(
+            str_detect(type_year, "17"), 2017, 2018)
+        )))
+  ) %>% 
+  select(-type_year)
+rates_df_long %>% 
+  ggplot(aes(rate_per_10k, fill = rate_type)) +
+  geom_density(alpha = 0.8) +
+  facet_wrap(~ year)
+rates_df_long %>% 
+  ggplot(aes(x = rate_type, y = rate_per_10k, fill = rate_type)) +
+  geom_boxplot() +
+  facet_wrap(~ year) +
+  scale_fill_tableau()
+
+data_summary <- function(x) {
+   m <- mean(x)
+   ymin <- m - sd(x)
+   ymax <- m + sd(x)
+   return(c(y = m, ymin = ymin, ymax = ymax))
+}
+
+death_rates_raw_v_eb_plot <- rates_df_long %>% 
+  mutate(
+    rate_type = as.factor(rate_type),
+    rate_type = fct_relevel(rate_type, "raw") 
+    ) %>% 
+  ggplot(aes(x = rate_type, y = rate_per_10k, fill = rate_type, color = rate_type)) +
+  geom_violin() +
+  stat_summary(fun.data = data_summary, color = "black", alpha = 0.8) +
+  facet_wrap(~ year) +
+  scale_fill_tableau() +
+  scale_color_tableau() +
+  xlab("Rate Type") +
+  theme(
+    legend.position = "none",
+    axis.text.x = element_text(size = 16),
+    axis.text.y = element_text(size = 16),
+    axis.title = element_text(size = 16),
+    plot.title = element_text(size = 18),
+    strip.text.x = element_text(size = 16),
+    plot.subtitle = element_text(size = 14),
+    plot.caption = element_text(size = 12)
+    ) +
+  ylab("Rate per 10k town residents") +
+  labs(
+    title = "Opioid overdose death rates per 10k MA town residents",
+    subtitle = "Raw vs EB-smoothed, by year",
+    caption = "Error bar = SD"
+    )
+death_rates_raw_v_eb_plot
+#save_plot(
+#  filename= "../../figures/tidy_figures/raw_vs_eb_smoothed_death_rates.png",
+#  death_rates_raw_v_eb_plot,
+#  base_height = 6,
+#  base_width = 12
+#  )
+
+updated_model_df <- read_csv("../../data/tidy_data/eb_smooth_final_model_df_with_features_and_pred.csv")
+updated_model_df
+mod_df_count
+
+drug_counts_for_smooth <- read_csv("../../data/tidy_data/eb_smooth_data/drug_counts_for_eb_smooth.csv")
+
+
+map_w_benzo_pres <- rate_ma_town_map %>%
+  left_join(
+    drug_counts_for_smooth %>% 
+      mutate(town = str_to_lower(town)) %>% 
+      select(town:ovr_65c, tot_benzo_2017) %>% 
+      filter(tot_benzo_2017 != 0) %>% 
+      mutate(benzo_rate_per_65 = tot_benzo_2017 / ovr_65c),
+    by = c("TOWN" = "town")
+    ) %>% 
+  left_join(
+    updated_model_df %>% 
+      filter(year == 2017) %>% 
+      select(TOWN, tot_benzo),
+    by = "TOWN"
+  )
+
+
+raw_benzo_map <- map_w_benzo_pres %>%
   ggplot() +
-  geom_sf(aes(fill = `2018` * 10000 / tot_pop_18), color = "black") +
-  scale_fill_viridis_c(option = "D", name = "Count") +
+  geom_sf(aes(fill = benzo_rate_per_65), color = "black") +
+  scale_fill_viridis_c(option = "D", name = "") +
   theme(axis.text.x = element_blank(), axis.text.y = element_blank()) +
-  ggtitle("Opioid overdose death counts per town\n2018 - EB Smoothed")
-map_eb_rates %>%
+  ggtitle("Medicare benzodiazepine prescription per residents aged 65+\n2017 - Raw")
+eb_benzo_map <- map_w_benzo_pres %>%
   ggplot() +
-  geom_sf(aes(fill = EB_rate_17), color = "black") +
-  scale_fill_viridis_c(option = "D", name = "Count") +
+  geom_sf(aes(fill = tot_benzo), color = "black") +
+  scale_fill_viridis_c(option = "D", name = "") +
   theme(axis.text.x = element_blank(), axis.text.y = element_blank()) +
-  ggtitle("Opioid overdose death counts per town\n2017 - EB Smoothed")
+  ggtitle("Medicare benzodiazepine prescription per residents aged 65+\n2017 - EB Smoothed")
+benzo_map_grid <- plot_grid(raw_benzo_map, eb_benzo_map, ncol=1)
+#save_plot(
+#  filename= "../../figures/tidy_figures/raw_vs_eb_smoothed_benzo_map.png",
+#  benzo_map_grid,
+#  base_width = 8,
+#  base_height = 8
+#  )
+
+
+mod_df_death_rate <- mod_df_count %>% 
+  mutate(year=year+1) %>% 
+  select(city_death:death_count_next_year, fin_pred, tot_pop) %>% 
+  mutate(
+    actual_death_rate = death_count_next_year * 10000/ tot_pop,
+    pred_death_rate = fin_pred * 10000/ tot_pop,
+    town_col = case_when(
+      city_death == "ayer" ~ "Ayer",
+      city_death == "gardner" ~ "Gardner",
+      city_death == "worcester" ~ "Worcester",
+      city_death == "fall river" ~ "Fall River",
+      TRUE ~ "Other"
+    ),
+    town_shape = ifelse(city_death %in% c("ayer", "gardner", "worcester", "fall river"), 1.5, 0.5)
+  )
+
+
+updated_model_deal_rate <- updated_model_df %>% 
+  mutate(year = year + 1) %>% 
+  select(TOWN:death_rate_next_yr, fin_pred) %>% 
+  mutate(
+    death_rate_next_yr = death_rate_next_yr * 10000,
+    fin_pred = exp(fin_pred) * 10000,
+    town_col = case_when(
+      TOWN == "ayer" ~ "Ayer",
+      TOWN == "gardner" ~ "Gardner",
+      TOWN == "worcester" ~ "Worcester",
+      TOWN == "fall river" ~ "Fall River",
+      TRUE ~ "Other"
+      )#,
+    #town_shape = ifelse(TOWN %in% c("ayer", "gardner", "worcester", "fall river"), 1.5, 0.5)
+    )
+updated_model_deal_rate 
+
+mod_df_death_rate %>% 
+  arrange(desc(actual_death_rate))
+mod_df_death_rate %>% 
+  filter(year == 2018) %>% 
+  arrange(desc(pred_death_rate))
+
+
+mod_df_death_rate_gath <- mod_df_death_rate %>% 
+  select(city_death:year, actual_death_rate:pred_death_rate, town_col) %>% 
+  gather(key="measure", value="value", actual_death_rate:pred_death_rate) %>% 
+  mutate(measure = ifelse(measure=="actual_death_rate", "Actual", "Predicted")) 
+
+updated_model_death_rate_gath <-updated_model_deal_rate %>% 
+  pivot_longer(death_rate_next_yr:fin_pred, names_to = "measure", values_to = "value") %>% 
+  mutate(measure = ifelse(str_detect(measure, "fin_pred"), "Predicted", "Actual"))
+
+death_rate_comp_plot <- mod_df_death_rate_gath %>% 
+  filter(town_col == "Other") %>% 
+  ggplot(aes(year, value, group = city_death, color = town_col)) +
+  geom_line(alpha = 0.5) +
+  geom_line(
+    data = mod_df_death_rate_gath %>% filter(town_col != "Other"),
+    aes(year, value, group = city_death, color = town_col),
+    size = 2.5
+    ) +
+  facet_wrap(~measure) +
+  xlab("Year") +
+  ylab("") +
+  theme(
+    axis.text.x = element_text(size = 20),
+    axis.text.y = element_text(size = 20),
+    axis.title = element_text(size = 20),
+    plot.title = element_text(size = 22),
+    strip.text.x = element_text(size = 20),
+    legend.text = element_text(size = 20),
+    legend.title = element_text(size = 20)
+    ) +
+  ggtitle("Actual v Predicted opioid overdose death rate per town\nRate per 10k town residents") +
+  scale_color_manual(values = c("#1b9e77", "#d95f02",  "#7570b3", "grey50","#e7298a"), name = "Towns")
+death_rate_comp_plot
+
+updated_model_death_rate_gath %>% 
+  filter(town_col == "Other") %>% 
+  ggplot(aes(year, value, group = TOWN, color = town_col)) +
+  geom_line(alpha = 0.5) +
+  geom_line(
+    data = updated_model_death_rate_gath %>% filter(town_col != "Other"),
+    aes(year, value, group = TOWN, color = town_col),
+    size = 2.5
+    ) +
+  facet_wrap(~measure) +
+  xlab("Year") +
+  ylab("") +
+  theme(
+    axis.text.x = element_text(size = 20),
+    axis.text.y = element_text(size = 20),
+    axis.title = element_text(size = 20),
+    plot.title = element_text(size = 22),
+    strip.text.x = element_text(size = 20),
+    legend.text = element_text(size = 20),
+    legend.title = element_text(size = 20)
+    ) +
+  ggtitle("Actual v Predicted opioid overdose death rate per town\nRate per 10k town residents") +
+  scale_color_manual(values = c("#1b9e77", "#d95f02",  "#7570b3", "grey50","#e7298a"), name = "Towns")
+
+both_mod_death_rate <- mod_df_death_rate_gath %>% 
+  mutate(model = "Raw Counts") %>% 
+  bind_rows(
+    updated_model_death_rate_gath %>%
+      mutate(
+        model = "EB Smoothed"
+        ) %>% 
+      rename(city_death = TOWN)
+    ) %>% 
+   mutate(
+    model_f = factor(model, levels = c("Raw Counts",  "EB Smoothed"))
+    )
+
+both_models_death_rate_plot <- both_mod_death_rate %>% 
+  filter(town_col == "Other") %>% 
+  ggplot(aes(year, value, group = city_death, color = town_col)) +
+  geom_line(alpha = 0.5) +
+  geom_line(
+    data = both_mod_death_rate %>% filter(town_col != "Other"),
+    aes(year, value, group = city_death, color = town_col),
+    size = 2.5
+    ) +
+  facet_grid(model_f ~ measure) +
+  xlab("Year") +
+  ylab("") +
+  theme(
+    axis.text.x = element_text(size = 16),
+    axis.text.y = element_text(size = 16),
+    axis.title = element_text(size = 16),
+    plot.title = element_text(size = 18),
+    strip.text.x = element_text(size = 16),
+    strip.text.y = element_text(size = 16),
+    legend.text = element_text(size = 16),
+    legend.title = element_text(size = 16)
+    ) +
+  ggtitle("Actual v Predicted opioid overdose death rate per town\nRate per 10k town residents") +
+  scale_color_manual(values = c("#1b9e77", "#d95f02",  "#7570b3", "grey50","#e7298a"), name = "Towns")
+both_models_death_rate_plot
+
+save_plot(
+  filename= "../../figures/tidy_figures/actual_and_pred_deathrate_comp_eb_smooth_and_raw.png",
+  both_models_death_rate_plot,
+  base_height = 12,
+  base_width = 14
+  )
+
 ```
 

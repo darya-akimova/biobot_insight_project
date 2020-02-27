@@ -1,0 +1,843 @@
+---
+title: "GAM model building"
+author: "Darya Akimova"
+date: "9/23/2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+# Setup
+
+## Packages:
+
+```{r packages, comment=NA}
+library(tidyverse)
+library(cowplot)
+library(GGally)
+library(viridis)
+library(mgcv)
+theme_set(theme_minimal())
+```
+
+
+## Data:
+
+
+```{r data_import, comment=NA}
+ma_town_coord <- read_csv("../../../data/tidy_data/ma_town_crs4326_coords.csv")
+death_acs <- read_csv("../../../data/tidy_data/overdose_death_count_acs_merge.csv")
+eb_smooth_death_rates <- read_csv("../../../data/tidy_data/eb_smooth_data/EB_smoothed_death_rates.csv")
+eb_smooth_pov_and_edu <- read_csv("../../../data/tidy_data/eb_smooth_data/eb_smoothed_pov_and_edu_metrics.csv")
+eb_smooth_drug_pres <- read_csv("../../../data/tidy_data/eb_smooth_data/tidied_eb_smoothed_pres_rates.csv")
+```
+
+
+# Dataset prep
+
+
+```{r dataset_prep_for_model, comment=NA}
+ma_town_w_inc <- ma_town_coord %>% 
+  inner_join(
+# need income metric from this and some other factors
+    death_acs %>% 
+      select(city_death, med_house_inc:mean_house_inc, urb_v_rur:town_status),
+    by = c("town" = "city_death")
+    )
+ma_town_w_inc
+eb_death_rates_for_mod <- eb_smooth_death_rates %>% 
+  select(TOWN, EB_rate_14:EB_rate_18) %>% 
+  mutate(TOWN = str_to_lower(TOWN)) %>% 
+  pivot_longer(EB_rate_14:EB_rate_18, names_to = "year", values_to = "death_rate_next_yr") %>% 
+  separate(year, into = c("x", "y", "year")) %>% 
+  select(-c(x, y)) %>% 
+  mutate(year = as.numeric(year) + 1999)
+eb_death_rates_for_mod
+data_for_model <- eb_death_rates_for_mod %>% 
+  inner_join(ma_town_w_inc, by = c("TOWN" = "town"))
+data_for_model
+
+data_for_model <- data_for_model %>% 
+  left_join(
+    eb_smooth_pov_and_edu %>% 
+      select(TOWN, starts_with("eb")) %>% 
+      mutate(TOWN = str_to_lower(TOWN)),
+    by = "TOWN"
+    )
+data_for_model <- data_for_model %>% 
+  inner_join(
+    eb_smooth_drug_pres %>% 
+      mutate(TOWN = str_to_lower(TOWN)) %>% 
+      pivot_wider(names_from = drug, values_from = eb_rate_estimate),
+     by = c("TOWN", "year")
+    )
+data_for_model
+data_for_model %>% 
+  select(alprazolam:tot_opioid, death_rate_next_yr) %>% 
+  ggpairs()
+data_for_model %>% 
+  ggplot(aes(death_rate_next_yr)) +
+  geom_histogram(bins=50) +
+  facet_wrap(~ year) +
+  xlab("Death Rate the Following Year\nEB Smoothed")
+data_for_model %>% 
+  ggplot(aes(death_rate_next_yr)) +
+  geom_histogram(bins=50)
+sapply(data.frame(sapply(data_for_model, is.na)), sum)
+data_for_model <- data_for_model %>% 
+  mutate(med_house_inc = replace_na(med_house_inc, median(data_for_model$med_house_inc, na.rm = TRUE)))
+sapply(data.frame(sapply(data_for_model, is.na)), sum)
+```
+
+
+# Modeling
+
+## Distribution family exploration
+
+What family of distributions is best?
+
+
+```{r}
+library(fitdistrplus)
+plotdist(data_for_model$death_rate_next_yr, histo = TRUE, demp = TRUE)
+descdist(data_for_model$death_rate_next_yr, discrete = FALSE, boot = 2000)
+fit_g  <- fitdist(data_for_model$death_rate_next_yr, "gamma", method = "mle")
+summary(fit_g)
+par(mfrow=c(2,2))
+#plot.legend <- c("Weibull", "lognormal", "gamma")
+denscomp(fit_g)
+cdfcomp (fit_g)
+qqcomp  (fit_g)
+ppcomp  (fit_g)
+plotdist(log(data_for_model$death_rate_next_yr), histo = TRUE, demp = TRUE)
+par(mfrow=c(1,1))
+descdist(log(data_for_model$death_rate_next_yr), discrete = FALSE, boot = 2000)
+data_for_model <- data_for_model %>% 
+  mutate(log_death_rate_next_yr = log(death_rate_next_yr))
+data_for_model %>% 
+  ggplot(aes(log_death_rate_next_yr)) +
+  geom_histogram(bins=50)
+data_for_model %>% 
+  ggplot(aes(log_death_rate_next_yr)) +
+  geom_histogram(bins=50) +
+  facet_wrap(~ year)
+plotdist(data_for_model$log_death_rate_next_yr, histo = TRUE, demp = TRUE)
+descdist(data_for_model$log_death_rate_next_yr, discrete = FALSE, boot = 2000)
+fit_gaus_log  <- fitdist(data_for_model$log_death_rate_next_yr, "norm", method = "mle")
+summary(fit_gaus_log)
+par(mfrow=c(2,2))
+denscomp(fit_gaus_log)
+cdfcomp (fit_gaus_log)
+qqcomp  (fit_gaus_log)
+ppcomp  (fit_gaus_log)
+par(mfrow=c(1,1))
+```
+
+
+## Data Split
+
+Here, the years refer to the feature years (the outcome variable is actually the 2018 opioid overdose death count).
+
+Train set: 2014-2016(2013-2015 below)
+Validation set: 2017 (2016 below)
+Test set (for final model): 2018 (2017 below)
+
+```{r data_split}
+test_set <- data_for_model %>% 
+  filter(year == 2017)
+valid_set_16 <- data_for_model %>% 
+  filter(year == 2016)
+train_set_16 <- data_for_model %>% 
+  filter(year < 2016)
+
+valid_set_15 <- data_for_model %>% 
+  filter(year == 2015)
+train_set_15 <- data_for_model %>% 
+  filter(year < 2015)
+
+train_set_16 %>% 
+  count(year)
+train_set_15 %>% 
+  count(year)
+mean(data_for_model$log_death_rate_next_yr)
+var(data_for_model$log_death_rate_next_yr)
+length(unique(data_for_model$TOWN))
+```
+
+
+## Functions
+
+
+```{r functions}
+# rmse error calc to evaluate models
+rmse <- function(model, df) {
+  rmse_error <- (df$death_rate_next_yr - exp(predict(model, df, type = "response"))) ^ 2 %>% 
+    mean() %>% 
+    sqrt()
+  return(rmse_error)
+}
+# concurvity transform to pull out the worst-case relationships between features
+concurvity_df <- function(model) {
+  worst_conc_tbl <- concurvity(model, full = FALSE) %>%
+    data.frame() %>% 
+    rownames_to_column("feature") %>% 
+    tbl_df() %>% 
+    mutate_if(is.numeric, round, 3) %>% 
+    dplyr::select(feature, contains("worst"))
+  return(worst_conc_tbl)
+}
+```
+
+
+## Model building - feature selection and parameter tuning
+
+Base model - only the required variables of:
+* geospatial coordinates, incorporated as an interaction term s(x, y) - centroids of the municipalities left in the dataset
+* year
+
+Note: `method="REML"` is a method to select the optimal smoothing parameter (to prevent overfitting and underfitting) - controls how close to the data points each individual smooth will get.
+
+
+```{r base_model}
+base_model_16 <- gam(
+  log_death_rate_next_yr ~ s(x,y) + s(year, k = 3),
+  data = train_set_16, method = "REML", family = gaussian()
+  )
+summary(base_model_16)
+gam.check(base_model_16)
+concurvity(base_model_16)
+qq.gam(base_model_16, cex = 4)
+# error on training
+rmse(base_model_16, train_set_16)
+# error on validation
+rmse(base_model_16, valid_set_16)
+
+mean(train_set_16$death_rate_next_yr)
+sd(train_set_16$death_rate_next_yr)
+mean(valid_set_16$death_rate_next_yr)
+sd(valid_set_16$death_rate_next_yr)
+
+base_model_15 <- gam(
+  log_death_rate_next_yr ~ s(x,y) + year,
+  data = train_set_15, method = "REML", family = gaussian()
+  )
+summary(base_model_15)
+gam.check(base_model_15)
+concurvity(base_model_15)
+qq.gam(base_model_15, cex = 4)
+# error on training
+rmse(base_model_15, train_set_15)
+# error on validation
+rmse(base_model_15, valid_set_15)
+```
+
+
+
+
+```{r full_model}
+### all features
+full_model_16 <- gam(
+    log_death_rate_next_yr ~ s(x,y) + s(year, k=3) + s(med_house_inc) + s(mean_house_inc) + urb_v_rur + town_status + s(eb_smooth_dropout) + s(eb_over25_less_than_hsed) + s(eb_inc_pov_rless1) + s(eb_inc_pov_bet1and2) + s(eb_inc_pov_rless2) + s(alprazolam) + s(diazepam) + s(lorazepam) + s(tot_benzo) + s(tot_opioid),
+    data = train_set_16, method = "REML", family = gaussian(), select = TRUE
+    )
+summary(full_model_16)
+gam.check(full_model_16)
+concurvity(full_model_16)
+qq.gam(full_model_16, cex = 4)
+# error on training
+rmse(full_model_16, train_set_16)
+# error on validation
+rmse(full_model_16, valid_set_16)
+
+full_model_15 <- gam(
+    log_death_rate_next_yr ~ s(x,y) + year + s(med_house_inc) + s(mean_house_inc) + urb_v_rur + town_status + s(eb_smooth_dropout) + s(eb_over25_less_than_hsed) + s(eb_inc_pov_rless1) + s(eb_inc_pov_bet1and2) + s(eb_inc_pov_rless2) + s(alprazolam) + s(diazepam) + s(lorazepam) + s(tot_benzo) + s(tot_opioid),
+    data = train_set_15, method = "REML", family = gaussian(), select = TRUE
+    )
+summary(full_model_15)
+gam.check(full_model_15)
+concurvity(full_model_15)
+qq.gam(full_model_15, cex = 4)
+# error on training
+rmse(full_model_15, train_set_15)
+# error on validation
+rmse(full_model_15, valid_set_15)
+
+```
+
+
+Notes:
+
+GAM Summary:
+
+GAM check:
+
+
+Concurvity:
+
+
+RMSE Error:
+
+
+
+Concurvity check on pairs of individual features:
+
+```{r full_model_concurvity}
+full_model_conc <- concurvity_df(full_model)
+# result:
+full_model_conc
+# heatmap plot
+full_model_conc <- full_model_conc %>% 
+  filter(feature != "para") %>% 
+  dplyr::select(-worst.para) %>% 
+  gather(key="feature2", value="value", -feature) %>% 
+  ggplot(aes(feature, feature2, fill=value)) +
+  geom_raster() +
+  scale_fill_viridis_c() +
+  theme(axis.text.x = element_text(angle=45, hjust=1)) +
+  ggtitle("Concurvity Plot\nFull Model") +
+  xlab("Feature 1") +
+  ylab("Feature 2")
+full_model_conc
+```
+
+Concurvity 0 (best) - 1 (worst)
+
+* diazepam and tot_benzo were not predictive and also have very high concurvity with several features - good candidates for removal
+* median and mean income are basically the same feature - will have to pick one
+
+
+Now start removing features. For this version, remove:
+* med_house_inc
+* tot_benzo_per_65_and_over
+
+```{r full_sub1}
+full_model_sub1 <- gam(
+    log_death_rate_next_yr ~ s(x,y) + s(year, k=3) + s(mean_house_inc) + urb_v_rur + town_status + s(eb_smooth_dropout) + s(eb_over25_less_than_hsed) + s(eb_inc_pov_rless1) + s(eb_inc_pov_bet1and2) + s(eb_inc_pov_rless2) + s(alprazolam) + s(diazepam) + s(lorazepam) + s(tot_opioid),
+    data = train_set_16, method = "REML", family = gaussian(), select = TRUE
+    )
+summary(full_model_sub1)
+gam.check(full_model_sub1)
+concurvity(full_model_sub1)
+qq.gam(full_model_sub1, cex = 4)
+# error on training
+rmse(full_model_sub1, train_set_16)
+# error on validation
+rmse(full_model_sub1, valid_set_16)
+```
+
+
+Notes:
+
+GAM Summary:
+
+GAM check:
+
+Concurvity:
+
+RMSE Error:
+
+
+Individual feature concurvity check:
+
+```{r full_sub1_concurvity}
+full_model_sub1_conc <- concurvity_df(full_model_sub1)
+full_model_sub1_conc %>% 
+  gather(key="feature2", value="value", -feature) %>% 
+  ggplot(aes(feature, feature2, fill=value)) +
+  geom_raster() +
+  scale_fill_viridis_c() +
+  theme(axis.text.x = element_text(angle=45, hjust=1)) +
+  ggtitle("Concurvity plot\nFull Model - sub 1")
+```
+
+
+Diazepam is not very predictive (p-val not sig) and has high concurvity with more predictive features - remove.
+
+
+Sub 2 - take out diazepam term:
+
+```{r full_sub2}
+full_model_sub2 <- gam(
+    log_death_rate_next_yr ~ s(x,y) + s(year, k=3) + s(mean_house_inc) + urb_v_rur + town_status + s(eb_smooth_dropout) + s(eb_over25_less_than_hsed) + s(eb_inc_pov_rless1) + s(eb_inc_pov_bet1and2) + s(eb_inc_pov_rless2) + s(alprazolam) + s(lorazepam) + s(tot_opioid),
+    data = train_set_16, method = "REML", family = gaussian(), select = TRUE
+    )
+summary(full_model_sub2)
+gam.check(full_model_sub2)
+concurvity(full_model_sub2)
+qq.gam(full_model_sub2, cex = 4)
+# error on training
+rmse(full_model_sub2, train_set_16)
+# error on validation
+rmse(full_model_sub2, valid_set_16)
+```
+
+
+Notes:
+
+GAM Summary:
+
+GAM check:
+
+Concurvity:
+
+RMSE Error:
+
+
+Individual feature concurvity check:
+
+
+```{r full_sub2_concurvity}
+full_model_sub2_conc <- concurvity_df(full_model_sub2)
+# sum of these individual concurvity values:
+full_model_sub2_conc %>% 
+  dplyr::select(contains("inc")) %>% 
+  summarize_all(sum)
+full_model_sub2_conc %>% 
+  dplyr::select(feature, contains("inc")) %>% 
+  arrange(desc(worst.s.eb_inc_pov_rless2.))
+```
+
+
+
+```{r full_sub3}
+full_model_sub3 <- gam(
+    log_death_rate_next_yr ~ s(x,y) + s(year, k=3) + s(mean_house_inc) + urb_v_rur + town_status + s(eb_smooth_dropout) + s(eb_over25_less_than_hsed) + s(eb_inc_pov_rless1) + s(eb_inc_pov_bet1and2) + s(alprazolam) + s(lorazepam) + s(tot_opioid),
+    data = train_set_16, method = "REML", family = gaussian(), select = TRUE
+    )
+summary(full_model_sub3)
+gam.check(full_model_sub3)
+concurvity(full_model_sub3)
+qq.gam(full_model_sub3, cex = 4)
+# error on training
+rmse(full_model_sub3, train_set_16)
+# error on validation
+rmse(full_model_sub3, valid_set_16)
+```
+
+Notes:
+
+GAM Summary:
+
+GAM check:
+
+Concurvity:
+
+RMSE Error:
+
+
+
+Individual feature concurvity check:
+
+
+```{r full_sub3_concurvity}
+full_model_sub3_conc <- concurvity_df(full_model_sub3)
+full_model_sub3_conc %>% 
+  gather(key="feature2", value="value", -feature) %>% 
+  ggplot(aes(feature, feature2, fill=value)) +
+  geom_raster() +
+  scale_fill_viridis_c() +
+  theme(axis.text.x = element_text(angle=45, hjust=1)) +
+  ggtitle("Concurvity plot\nFull Model - sub 3")
+```
+
+
+
+```{r full_sub4}
+full_model_sub4 <- gam(
+    log_death_rate_next_yr ~ s(x,y) + s(year, k=3) + s(mean_house_inc) + urb_v_rur + town_status + s(eb_smooth_dropout) + s(eb_inc_pov_rless1) + s(eb_inc_pov_bet1and2) + s(alprazolam) + s(lorazepam) + s(tot_opioid),
+    data = train_set_16, method = "REML", family = gaussian(), select = TRUE
+    )
+summary(full_model_sub4)
+gam.check(full_model_sub4)
+concurvity(full_model_sub4)
+qq.gam(full_model_sub4, cex = 4)
+# error on training
+rmse(full_model_sub4, train_set_16)
+# error on validation
+rmse(full_model_sub4, valid_set_16)
+
+full_model_sub4_15 <- gam(
+    log_death_rate_next_yr ~ s(x,y) + year + s(mean_house_inc) + urb_v_rur + town_status + s(eb_smooth_dropout) + s(eb_inc_pov_rless1) + s(eb_inc_pov_bet1and2) + s(alprazolam) + s(lorazepam) + s(tot_opioid),
+    data = train_set_15, method = "REML", family = gaussian(), select = TRUE
+    )
+summary(full_model_sub4_15)
+gam.check(full_model_sub4_15)
+concurvity(full_model_sub4_15)
+qq.gam(full_model_sub4_15, cex = 4)
+# error on training
+rmse(full_model_sub4_15, train_set_15)
+# error on validation
+rmse(full_model_sub4_15, valid_set_15)
+```
+
+Notes:
+
+GAM Summary:
+
+GAM check:
+
+Concurvity:
+
+RMSE Error:
+
+
+Individual feature concurvity check:
+
+```{r full_sub4_concurvity}
+full_model_sub4_conc <- concurvity_df(full_model_sub4)
+full_model_sub4_conc %>% 
+  gather(key="feature2", value="value", -feature) %>% 
+  ggplot(aes(feature, feature2, fill=value)) +
+  geom_raster() +
+  scale_fill_viridis_c() +
+  theme(axis.text.x = element_text(angle=45, hjust=1)) +
+  ggtitle("Concurvity plot\nFull Model - sub 4")
+```
+
+
+
+
+```{r full_sub5}
+full_model_sub5 <- gam(
+    log_death_rate_next_yr ~ s(x,y) + s(year, k=3) + s(mean_house_inc) + town_status + s(eb_inc_pov_rless1) + s(eb_inc_pov_bet1and2) + s(alprazolam) + s(lorazepam) + s(tot_opioid),
+    data = train_set_16, method = "REML", family = gaussian(), select = TRUE
+    )
+summary(full_model_sub5)
+gam.check(full_model_sub5)
+concurvity(full_model_sub5)
+qq.gam(full_model_sub5, cex = 4)
+# error on training
+rmse(full_model_sub5, train_set_16)
+# error on validation
+rmse(full_model_sub5, valid_set_16)
+
+
+full_model_sub5_15 <- gam(
+    log_death_rate_next_yr ~ s(x,y) + year + s(mean_house_inc) + town_status + s(eb_inc_pov_rless1) + s(eb_inc_pov_bet1and2) + s(alprazolam) + s(lorazepam) + s(tot_opioid),
+    data = train_set_15, method = "REML", family = gaussian(), select = TRUE
+    )
+summary(full_model_sub5_15)
+gam.check(full_model_sub5_15)
+concurvity(full_model_sub5_15)
+qq.gam(full_model_sub5_15, cex = 4)
+# error on training
+rmse(full_model_sub5_15, train_set_15)
+# error on validation
+rmse(full_model_sub5_15, valid_set_15)
+```
+
+
+
+
+
+
+
+```{r full_sub4_concurvity_followup}
+full_model_sub5_conc <- concurvity_df(full_model_sub5)
+full_model_sub5_conc %>% 
+  gather(key="feature2", value="value", -feature) %>% 
+  ggplot(aes(feature, feature2, fill=value)) +
+  geom_raster() +
+  scale_fill_viridis_c() +
+  theme(axis.text.x = element_text(angle=45, hjust=1)) +
+  ggtitle("Concurvity plot\nFull Model - sub 5")
+colnames(full_model_sub5_conc)
+full_model_sub5_conc %>% 
+  dplyr::select(worst.s.alprazolam.:worst.s.tot_opioid.) %>% 
+  arrange(desc(worst.s.tot_opioid.))
+full_model_sub5_conc %>% 
+  dplyr::select(worst.s.alprazolam.:worst.s.tot_opioid.) %>% 
+  summarize_all(sum)
+```
+
+
+
+
+```{r full_sub6}
+full_model_sub6 <- gam(
+    log_death_rate_next_yr ~ s(x,y) + s(year, k=3) + s(mean_house_inc) + town_status + s(eb_inc_pov_rless1) + s(eb_inc_pov_bet1and2) + s(alprazolam) + s(tot_opioid),
+    data = train_set_16, method = "REML", family = gaussian(), select = TRUE
+    )
+summary(full_model_sub6)
+gam.check(full_model_sub6)
+concurvity(full_model_sub6)
+qq.gam(full_model_sub6, cex = 4)
+# error on training
+rmse(full_model_sub6, train_set_16)
+# error on validation
+rmse(full_model_sub6, valid_set_16)
+```
+
+
+Notes:
+
+GAM Summary:
+
+GAM check:
+* maybe it's time to try upping the k for some of these features?
+
+Concurvity:
+
+RMSE Error:
+
+
+
+Individual feature concurvity check:
+
+
+```{r full_sub6_concurvity}
+full_model_sub6_conc <- concurvity_df(full_model_sub6)
+full_model_sub6_conc %>% 
+  gather(key="feature2", value="value", -feature) %>% 
+  ggplot(aes(feature, feature2, fill=value)) +
+  geom_raster() +
+  scale_fill_viridis_c() +
+  theme(axis.text.x = element_text(angle=45, hjust=1)) +
+  ggtitle("Concurvity plot\nFull Model - Sub 6")
+```
+
+
+
+
+```{r full_sub7}
+full_model_sub7 <- gam(
+    log_death_rate_next_yr ~ s(x,y) + s(year, k=3) + s(mean_house_inc) + town_status + s(eb_inc_pov_rless1) + s(alprazolam) + s(tot_opioid),
+    data = train_set_16, method = "REML", family = gaussian(), select = TRUE
+    )
+summary(full_model_sub7)
+gam.check(full_model_sub7)
+concurvity(full_model_sub7)
+qq.gam(full_model_sub7, cex = 4)
+# error on training
+rmse(full_model_sub7, train_set_16)
+# error on validation
+rmse(full_model_sub7, valid_set_16)
+```
+
+Notes:
+
+GAM Summary:
+
+
+GAM check:
+
+
+Concurvity:
+
+
+RMSE Error:
+
+
+```{r full_sub8_noopi}
+full_model_sub8_noopi <- gam(
+    log_death_rate_next_yr ~ s(x,y) + s(year, k=3) + s(mean_house_inc) + town_status + s(eb_inc_pov_rless1) + s(alprazolam),
+    data = train_set_16, method = "REML", family = gaussian(), select = TRUE
+    )
+summary(full_model_sub8_noopi)
+gam.check(full_model_sub8_noopi)
+concurvity(full_model_sub8_noopi)
+qq.gam(full_model_sub8_noopi, cex = 4)
+# error on training
+rmse(full_model_sub8_noopi, train_set_16)
+# error on validation
+rmse(full_model_sub8_noopi, valid_set_16)
+
+full_model_sub8_noopi_15 <- gam(
+    log_death_rate_next_yr ~ s(x,y) + year + s(mean_house_inc) + town_status + s(eb_inc_pov_rless1) + s(alprazolam),
+    data = train_set_15, method = "REML", family = gaussian(), select = TRUE
+    )
+summary(full_model_sub8_noopi_15)
+gam.check(full_model_sub8_noopi_15)
+concurvity(full_model_sub8_noopi_15)
+qq.gam(full_model_sub8_noopi_15, cex = 4)
+# error on training
+rmse(full_model_sub8_noopi_15, train_set_15)
+# error on validation
+rmse(full_model_sub8_noopi_15, valid_set_15)
+```
+
+
+```{r full_sub8_nobenzo}
+full_model_sub8_nobenzo <- gam(
+    log_death_rate_next_yr ~ s(x,y) + s(year, k=3) + s(mean_house_inc) + town_status + s(eb_inc_pov_rless1)+ s(tot_opioid),
+    data = train_set_16, method = "REML", family = gaussian(), select = TRUE
+    )
+summary(full_model_sub8_nobenzo)
+gam.check(full_model_sub8_nobenzo)
+concurvity(full_model_sub8_nobenzo)
+qq.gam(full_model_sub8_nobenzo, cex = 4)
+# error on training
+rmse(full_model_sub8_nobenzo, train_set_16)
+# error on validation
+rmse(full_model_sub8_nobenzo, valid_set_16)
+
+
+full_model_sub8_nobenzo_15 <- gam(
+    log_death_rate_next_yr ~ s(x,y) + year + s(mean_house_inc) + town_status + s(eb_inc_pov_rless1)+ s(tot_opioid),
+    data = train_set_15, method = "REML", family = gaussian(), select = TRUE
+    )
+summary(full_model_sub8_nobenzo_15)
+gam.check(full_model_sub8_nobenzo_15)
+concurvity(full_model_sub8_nobenzo_15)
+qq.gam(full_model_sub8_nobenzo_15, cex = 4)
+# error on training
+rmse(full_model_sub8_nobenzo_15, train_set_15)
+# error on validation
+rmse(full_model_sub8_nobenzo_15, valid_set_15)
+```
+
+
+
+```{r full_sub8_no_pov}
+full_model_sub8_nopov <- gam(
+    log_death_rate_next_yr ~ s(x,y) + s(year, k=3) + s(mean_house_inc) + town_status + s(alprazolam) + s(tot_opioid),
+    data = train_set_16, method = "REML", family = gaussian(), select = TRUE
+    )
+summary(full_model_sub8_nopov)
+gam.check(full_model_sub8_nopov)
+concurvity(full_model_sub8_nopov)
+qq.gam(full_model_sub8_nopov, cex = 4)
+# error on training
+rmse(full_model_sub8_nopov, train_set_16)
+# error on validation
+rmse(full_model_sub8_nopov, valid_set_16)
+```
+
+
+
+
+```{r full_sub8}
+full_model_sub9 <- gam(
+    log_death_rate_next_yr ~ s(x,y) + s(year, k=3) + s(mean_house_inc, k=14) + town_status + s(eb_inc_pov_rless1,k=15)+ s(tot_opioid),
+    data = train_set_16, method = "REML", family = gaussian(), select = TRUE
+    )
+summary(full_model_sub9)
+gam.check(full_model_sub9)
+concurvity(full_model_sub8_nobenzo)
+qq.gam(full_model_sub9, cex = 4)
+# error on training
+rmse(full_model_sub9, train_set_16)
+# error on validation
+rmse(full_model_sub9, valid_set_16)
+```
+
+
+
+Model is about the same - just go with model iteration 10 as the final formulation.
+
+
+Retrain this formulation on the 2014-2017 data (2013-2016 here)
+
+```{r final_model_train_eval}
+train_full <- data_for_model %>% 
+  filter(year < 2017)
+final_model <- gam(
+    log_death_rate_next_yr ~ s(x,y) + s(year, k=3) + s(mean_house_inc, k=14) + town_status + s(eb_inc_pov_rless1,k=15)+ s(tot_opioid),
+    data = train_full, method = "REML", family = gaussian(), select = TRUE
+    )
+summary(final_model)
+gam.check(final_model)
+concurvity(final_model)
+qq.gam(final_model, cex = 4)
+# error on training
+rmse(final_model, train_full)
+# error on validation
+rmse(final_model, test_set)
+mean(test_set$death_count_next_year)
+sd(test_set$death_count_next_year)
+
+
+
+final_model_alt <- gam(
+    log_death_rate_next_yr ~ s(x,y) + s(year, k=3) + s(mean_house_inc, k=14) + s(tot_opioid),
+    data = train_full, method = "REML", family = gaussian(), select = TRUE
+    )
+summary(final_model_alt)
+gam.check(final_model_alt)
+concurvity(final_model_alt)
+qq.gam(final_model_alt, cex = 4)
+# error on training
+rmse(final_model_alt, train_full)
+# error on validation
+rmse(final_model_alt, test_set)
+
+```
+
+
+
+```{r predictions}
+test_set$fin_pred <- predict(final_model, test_set, type = "response")
+sd(test_set$fin_pred)
+data_for_model$fin_pred <- predict(final_model, data_for_model, type = "response")
+```
+
+
+## Model visualizations
+
+
+```{r model_viz_qqplot_all_smooths}
+library(mgcViz)
+final_model_convert <- getViz(final_model)
+final_qq_plot <- qq(final_model_convert, rep = 10, method = "simul1", CI = "normal", showReps = TRUE,
+        ngr = 1e2, a.replin = list(alpha = 0.1), a.qqpoi = list(shape = 19)) +
+  ggtitle("QQ Plot\nNegative binomial GAM - Retrained final model") +
+  xlab("Theoretical Quantiles") +
+  ylab("Deviance Residuals") +
+  theme(
+    axis.text.x = element_text(size = 20),
+    axis.text.y = element_text(size = 20),
+    axis.title = element_text(size = 20),
+    plot.title = element_text(size = 20)
+    )
+final_qq_plot
+# save_plot doesn't work - save manually in figures/tidy figures/ final_model_retrained_qq_plot.png
+# different variations on result plots
+print(plot(final_model_convert, allTerms = T), pages = 1)
+# directly save this from R plot interface to figures/tidy_figures/full_model_gam_plot.png
+```
+
+
+
+```{r model_viz_expreimentation}
+# pick out individual term
+plot(final_model_convert, allTerms = T, select = 3)
+# does changing the residuals setting change anything?
+print(plot(final_model_convert, allTerms = T, residuals = TRUE), pages = 1)
+# no
+# try with rug (represenin)
+plot(final_model, select = 5, rug = TRUE)
+
+# cleaned up version of one of the individual plots?
+var_7 <- plot(sm(final_model_convert, 5))
+var_7 + 
+ # l_rug(mapping = aes(x=x, y=y), alpha = 0.8) +
+  l_ciPoly() +
+  l_fitLine(colour = "red") +
+  #l_ciLine(mul = 5, colour = "blue", linetype = 2) + 
+  l_points(shape = 19, size = 1, alpha = 0.1)
+```
+
+Can see some of the noisiness - need to be wary of interpreting result.
+
+Would tidying up the odel to pull out coefficients be useful?
+
+```{r model_tidy}
+library(broom)
+tidy(final_model)
+tidy(final_model, parametric=TRUE)
+coef(final_model)
+```
+
+Not sure what to do with it.
+
+Save the final model df for easier plotting/mapping:
+
+```{r mod_df_write}
+#write_csv(data_for_model, "../../../data/tidy_data/eb_smooth_final_model_df_with_features_and_pred.csv")
+```
+
+
+
